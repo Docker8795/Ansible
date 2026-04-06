@@ -1,0 +1,161 @@
+---
+- hosts: all
+  become: yes
+  gather_facts: yes
+
+  tasks:
+    - name: 1.1 - Show current default boot target
+      ansible.builtin.command: systemctl get-default
+      register: current_target
+      changed_when: false
+
+    - name: 1.2 - Display current boot target
+      ansible.builtin.debug:
+        msg: "Current default target is: {{ current_target.stdout }}"
+
+    - name: 1.3 - Set default boot target to multi-user (CLI mode)
+      ansible.builtin.command: systemctl set-default multi-user.target
+      register: set_target
+      changed_when: "'Created symlink' in set_target.stderr or 'Removed' in set_target.stderr"
+
+    - name: 1.4 - Check GRUB2 configuration file exists
+      ansible.builtin.stat:
+        path: /etc/default/grub
+      register: grub_file
+
+    - name: 1.5 - Display GRUB file status
+      ansible.builtin.debug:
+        msg: "GRUB config exists: {{ grub_file.stat.exists }}"
+
+    - name: 1.6 - Backup GRUB configuration before changes
+      ansible.builtin.copy:
+        src: /etc/default/grub
+        dest: /etc/default/grub.backup
+        remote_src: yes
+        mode: '0644'
+      when: grub_file.stat.exists
+
+    - name: 1.7 - Set GRUB timeout to 5 seconds
+      ansible.builtin.lineinfile:
+        path: /etc/default/grub
+        regexp: '^GRUB_TIMEOUT='
+        line: 'GRUB_TIMEOUT=5'
+        state: present
+      when: grub_file.stat.exists
+
+    - name: 1.8 - Regenerate GRUB2 config file
+      ansible.builtin.command: grub2-mkconfig -o /boot/grub2/grub.cfg
+      when: ansible_os_family == "RedHat"
+      changed_when: true
+
+    - name: 1.9 - Check last boot logs (dmesg)
+      ansible.builtin.command: dmesg --level=err,warn
+      register: boot_errors
+      changed_when: false
+      failed_when: false
+
+    - name: 1.10 - Show boot errors/warnings
+      ansible.builtin.debug:
+        var: boot_errors.stdout_lines
+
+    - name: 1.11 - Check system uptime
+      ansible.builtin.command: uptime
+      register: uptime_result
+      changed_when: false
+
+    - name: 1.12 - Display uptime
+      ansible.builtin.debug:
+        msg: "System uptime: {{ uptime_result.stdout }}"
+
+    # ====== OUTPUT CAPTURE SECTION ======
+    - name: 1.13 - Create output directory on each node
+      ansible.builtin.file:
+        path: /tmp/ansible_outputs
+        state: directory
+        mode: '0755'
+
+    - name: 1.14 - Save all task outputs to file on node
+      ansible.builtin.copy:
+        content: |
+          ========================================
+          ANSIBLE PLAYBOOK EXECUTION REPORT
+          ========================================
+          Node: {{ inventory_hostname }}
+          Execution Date: {{ ansible_date_time.iso8601 }}
+          
+          ========== TASK OUTPUTS ==========
+          
+          Task 1.1 - Current Boot Target:
+          Status: OK
+          Output: {{ current_target.stdout }}
+          
+          Task 1.2 - Boot Target Display:
+          Status: OK
+          Message: Current default target is: {{ current_target.stdout }}
+          
+          Task 1.3 - Set Boot Target:
+          Status: {{ set_target.rc == 0 | ternary('OK', 'FAILED') }}
+          Command: {{ set_target.cmd | join(' ') }}
+          Stderr: {{ set_target.stderr if set_target.stderr else 'None' }}
+          
+          Task 1.4 - GRUB File Check:
+          Status: OK
+          GRUB File Exists: {{ grub_file.stat.exists }}
+          
+          Task 1.5 - GRUB Status Display:
+          Status: OK
+          Message: GRUB config exists: {{ grub_file.stat.exists }}
+          
+          Task 1.6 - GRUB Backup:
+          Status: {% if grub_file.stat.exists %}OK - Backup Created{% else %}SKIPPED{% endif %}
+          
+          Task 1.7 - Set GRUB Timeout:
+          Status: {% if grub_file.stat.exists %}OK{% else %}SKIPPED{% endif %}
+          
+          Task 1.8 - Regenerate GRUB Config:
+          Status: {% if ansible_os_family == "RedHat" %}OK{% else %}SKIPPED (Not RedHat){% endif %}
+          OS Family: {{ ansible_os_family }}
+          
+          Task 1.9 - Boot Errors/Warnings:
+          Status: OK
+          Total Lines: {{ boot_errors.stdout_lines | length }}
+          First Error: {{ boot_errors.stdout_lines[0] if boot_errors.stdout_lines else 'None' }}
+          
+          Task 1.10 - Boot Errors Display:
+          Status: OK
+          
+          Task 1.11 - System Uptime:
+          Status: OK
+          Output: {{ uptime_result.stdout }}
+          
+          Task 1.12 - Uptime Display:
+          Status: OK
+          Message: System uptime: {{ uptime_result.stdout }}
+          
+          ========== SUMMARY ==========
+          Total Tasks: 12
+          All Tasks Completed: YES
+          ==========================================
+        dest: /tmp/ansible_outputs/playbook_output_{{ inventory_hostname }}.txt
+        mode: '0644'
+
+    - name: 1.15 - Display saved output file location
+      ansible.builtin.debug:
+        msg: "Output saved to: /tmp/ansible_outputs/playbook_output_{{ inventory_hostname }}.txt"
+
+    - name: 1.16 - Fetch output files to Ansible master
+      ansible.builtin.fetch:
+        src: /tmp/ansible_outputs/playbook_output_{{ inventory_hostname }}.txt
+        dest: /root/playbooks/outputs/{{ inventory_hostname }}_playbook_output.txt
+        flat: yes
+
+    - name: 1.17 - Display final status
+      ansible.builtin.debug:
+        msg: 
+          - "========================================="
+          - "Playbook Execution Completed Successfully"
+          - "========================================="
+          - "Node: {{ inventory_hostname }}"
+          - "Output File: /tmp/ansible_outputs/playbook_output_{{ inventory_hostname }}.txt"
+          - "Master Copy: /root/playbooks/outputs/{{ inventory_hostname }}_playbook_output.txt"
+          - "========================================="
