@@ -1,0 +1,1225 @@
+---
+# ============================================================
+# CHAPTER 5: SERVICE MANAGEMENT
+# ============================================================
+# READY TO EXECUTE VERSION - All 40+ Tasks
+#
+# Duration: 20-30 minutes
+# Difficulty: ⭐⭐ Intermediate
+# Prerequisites: Root/sudo access, Chapters 1-4 completed
+#
+# Usage:
+#   ansible-playbook -i inventory.ini CHAPTER-5-EXECUTABLE.yml -v
+#
+# Before running:
+#   1. Update inventory.ini with your server IPs
+#   2. Test connectivity: ansible all -i inventory.ini -m ping
+#   3. Run syntax check: ansible-playbook -i inventory.ini CHAPTER-5-EXECUTABLE.yml --syntax-check
+#
+# ============================================================
+
+- name: Chapter 5 - Service Management
+  hosts: all
+  become: yes
+  gather_facts: yes
+
+  vars:
+    # Services to manage
+    system_services:
+      - name: "sshd"
+        display_name: "SSH Server"
+        description: "Secure Shell Server"
+        enabled: yes
+        state: "started"
+        category: "system"
+      
+      - name: "firewalld"
+        display_name: "Firewall Daemon"
+        description: "Dynamic Firewall Manager"
+        enabled: yes
+        state: "started"
+        category: "system"
+      
+      - name: "chronyd"
+        display_name: "Chrony NTP"
+        description: "Network Time Protocol Daemon"
+        enabled: yes
+        state: "started"
+        category: "system"
+
+    # Services to disable (security hardening)
+    disabled_services:
+      - name: "avahi-daemon"
+        display_name: "Avahi mDNS Daemon"
+        reason: "Not needed, improves security"
+      
+      - name: "cups"
+        display_name: "CUPS Printing Service"
+        reason: "Not needed on servers"
+
+    # Custom services
+    custom_services:
+      - name: "myapp"
+        display_name: "My Application Service"
+        description: "Custom application service"
+        user: "appuser"
+        group: "appgroup"
+        exec_start: "/usr/local/bin/myapp"
+        working_dir: "/opt/app"
+
+    # Service timers (scheduled tasks)
+    service_timers:
+      - name: "cleanup"
+        display_name: "Cleanup Timer"
+        description: "Daily cleanup at 2 AM"
+        on_calendar: "daily"
+        on_calendar_time: "*-*-* 02:00:00"
+
+  tasks:
+
+    # ==========================================================
+    # TASK 5.1: Display Chapter 5 Header
+    # ==========================================================
+    - name: 5.1 - Display Chapter 5 Header
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          CHAPTER 5: SERVICE MANAGEMENT
+          ==========================================
+          Duration: 20-30 minutes
+          Difficulty: ⭐⭐ Intermediate
+          Total Tasks: 40+
+          
+          Topics:
+          - systemd basics
+          - Service enable/disable
+          - Service start/stop/restart
+          - Service status monitoring
+          - Custom service creation
+          - Service dependencies
+          - Socket services
+          - Service timers
+          - Troubleshooting services
+          ==========================================
+
+    # ==========================================================
+    # TASK 5.2: Gather systemd information
+    # ==========================================================
+    - name: 5.2 - Gather systemd information
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          SYSTEMD INFORMATION
+          ==========================================
+          OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
+          Init System: systemd
+          
+          Key Concepts:
+          - Unit: Service, socket, timer, etc
+          - Target: Group of units (runlevel equivalent)
+          - Service: Daemon or application
+          - Socket: IPC activation
+          - Timer: Scheduled execution
+          
+          Systemd Directories:
+          - /etc/systemd/system/        (user configs)
+          - /usr/lib/systemd/system/    (package configs)
+          - /run/systemd/               (runtime files)
+          
+          Key Tools:
+          - systemctl: Manage services
+          - journalctl: View logs
+          - systemd-analyze: Performance analysis
+          ==========================================
+
+    # ==========================================================
+    # TASK 5.3: List all units
+    # ==========================================================
+    - name: 5.3 - List all units
+      ansible.builtin.shell: "systemctl list-units --all --state=loaded"
+      register: all_units
+      changed_when: false
+
+    # ==========================================================
+    # TASK 5.4: Display system units count
+    # ==========================================================
+    - name: 5.4 - Display system units count
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          SYSTEM UNITS
+          ==========================================
+          Total units loaded:
+          {{ all_units.stdout_lines | length }} units
+          
+          Unit Types:
+          - .service: Services (daemons)
+          - .socket: Socket activation
+          - .timer: Scheduled timers
+          - .target: Groupings (like runlevels)
+          - .mount: Filesystem mounts
+          - .slice: Resource control groups
+          
+          View units:
+          $ systemctl list-units --type=service
+          $ systemctl list-units --all
+          $ systemctl list-units --failed
+          ==========================================
+
+    # ==========================================================
+    # TASK 5.5: Get current systemd target
+    # ==========================================================
+    - name: 5.5 - Get current systemd target
+      ansible.builtin.shell: "systemctl get-default"
+      register: current_target
+      changed_when: false
+
+    # ==========================================================
+    # TASK 5.6: Display current target
+    # ==========================================================
+    - name: 5.6 - Display current target
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          SYSTEMD TARGETS
+          ==========================================
+          Current target: {{ current_target.stdout }}
+          
+          Common Targets:
+          - graphical.target     (GUI desktop, runlevel 5)
+          - multi-user.target    (CLI only, runlevel 3)
+          - rescue.target        (Maintenance mode)
+          - emergency.target     (Emergency shell)
+          - poweroff.target      (Shutdown)
+          - reboot.target        (Reboot)
+          
+          View available targets:
+          $ systemctl list-units --type=target
+          $ systemctl list-targets
+          
+          Set default target:
+          $ systemctl set-default multi-user.target
+          ==========================================
+
+    # ==========================================================
+    # TASK 5.7: Gather service facts
+    # ==========================================================
+    - name: 5.7 - Gather service facts
+      ansible.builtin.service_facts:
+      register: service_facts
+
+    # ==========================================================
+    # TASK 5.8: Display service statistics
+    # ==========================================================
+    - name: 5.8 - Display service statistics
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          SERVICE STATISTICS
+          ==========================================
+          Total services: {{ ansible_facts.services | length }}
+          
+          Running services: {{ ansible_facts.services | dict2items | selectattr('value.state', 'equalto', 'running') | list | length }}
+          
+          Enabled services: {{ ansible_facts.services | dict2items | selectattr('value.enabled', 'equalto', True) | list | length }}
+          
+          Sample services:
+          - sshd: {% if 'sshd.service' in ansible_facts.services %}{{ ansible_facts.services['sshd.service'].state }}{% else %}not found{% endif %}
+          - firewalld: {% if 'firewalld.service' in ansible_facts.services %}{{ ansible_facts.services['firewalld.service'].state }}{% else %}not found{% endif %}
+          - chronyd: {% if 'chronyd.service' in ansible_facts.services %}{{ ansible_facts.services['chronyd.service'].state }}{% else %}not found{% endif %}
+          ==========================================
+
+    # ==========================================================
+    # TASK 5.9: Ensure critical services are running
+    # ==========================================================
+    - name: 5.9 - Ensure critical services are running
+      ansible.builtin.systemd:
+        name: "{{ item.name }}"
+        state: "{{ item.state }}"
+        enabled: "{{ item.enabled }}"
+        daemon_reload: yes
+      loop: "{{ system_services }}"
+      register: service_status
+
+    # ==========================================================
+    # TASK 5.10: Display service management results
+    # ==========================================================
+    - name: 5.10 - Display service management results
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          SYSTEM SERVICES MANAGED
+          ==========================================
+          {% for item in system_services %}
+          ✓ {{ item.display_name }} ({{ item.name }})
+            - Status: {{ item.state }}
+            - Enabled: {{ item.enabled }}
+            - Category: {{ item.category }}
+            - Description: {{ item.description }}
+          {% endfor %}
+          
+          Services modified: {% if service_status is changed %}{{ service_status.changed | ternary('YES - Services changed', 'NO - Already configured') }}{% endif %}
+          ==========================================
+
+    # ==========================================================
+    # TASK 5.11: Verify service status
+    # ==========================================================
+    - name: 5.11 - Verify service status
+      ansible.builtin.shell: "systemctl status {{ item.name }} --no-pager"
+      loop: "{{ system_services }}"
+      register: service_verify
+      changed_when: false
+      failed_when: false
+
+    # ==========================================================
+    # TASK 5.12: Display service verification
+    # ==========================================================
+    - name: 5.12 - Display service verification
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          SERVICE VERIFICATION
+          ==========================================
+          {% for result in service_verify.results %}
+          {{ result.item.display_name }}:
+          {{ result.stdout_lines[0:3] | join('\n') }}
+          
+          {% endfor %}
+          ==========================================
+
+    # ==========================================================
+    # TASK 5.13: Show service dependencies
+    # ==========================================================
+    - name: 5.13 - Show service dependencies
+      ansible.builtin.shell: "systemctl list-dependencies --no-pager {{ item.name }}"
+      loop: "{{ system_services[:1] }}"
+      register: dependencies
+      changed_when: false
+      failed_when: false
+
+    # ==========================================================
+    # TASK 5.14: Display dependencies
+    # ==========================================================
+    - name: 5.14 - Display dependencies
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          SERVICE DEPENDENCIES
+          ==========================================
+          Dependencies explain which services need to start
+          before another service can start.
+          
+          Example (sshd):
+          {{ dependencies.results[0].stdout }}
+          
+          Check dependencies:
+          $ systemctl list-dependencies service-name
+          $ systemctl list-dependencies --reverse service-name
+          
+          Common dependencies:
+          - network.target: Network must be up
+          - network-online.target: Online connectivity
+          - multi-user.target: All system services
+          - After=: Start after this unit
+          - Requires=: Must run with this unit
+          ==========================================
+
+    # ==========================================================
+    # TASK 5.15: Show failing services
+    # ==========================================================
+    - name: 5.15 - Show failing services
+      ansible.builtin.shell: "systemctl list-units --failed --no-pager"
+      register: failed_services
+      changed_when: false
+
+    # ==========================================================
+    # TASK 5.16: Display failed services
+    # ==========================================================
+    - name: 5.16 - Display failed services
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          FAILED SERVICES
+          ==========================================
+          Failed services (if any):
+          {{ failed_services.stdout }}
+          
+          {% if 'failed' in failed_services.stdout %}
+          To fix failed services:
+          1. Check logs: journalctl -u service-name -n 50
+          2. Check status: systemctl status service-name
+          3. Restart: systemctl restart service-name
+          {% else %}
+          ✓ No failed services detected!
+          {% endif %}
+          ==========================================
+
+    # ==========================================================
+    # TASK 5.17: Display journal (logs)
+    # ==========================================================
+    - name: 5.17 - Display system journal (recent)
+      ansible.builtin.shell: "journalctl -n 20 --no-pager"
+      register: journal_logs
+      changed_when: false
+
+    # ==========================================================
+    # TASK 5.18: Display journal output
+    # ==========================================================
+    - name: 5.18 - Display journal output
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          SYSTEM JOURNAL (RECENT LOGS)
+          ==========================================
+          {{ journal_logs.stdout }}
+          
+          Journal Commands:
+          $ journalctl -u service-name          (specific service)
+          $ journalctl -n 50                    (last 50 lines)
+          $ journalctl --since "2 hours ago"   (time range)
+          $ journalctl -f                       (follow/tail)
+          $ journalctl --priority=err           (by priority)
+          
+          Priority levels:
+          0=emerg, 1=alert, 2=crit, 3=err
+          4=warning, 5=notice, 6=info, 7=debug
+          ==========================================
+
+    # ==========================================================
+    # TASK 5.19: Demonstrate service restart
+    # ==========================================================
+    - name: 5.19 - Demonstrate service restart concept
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          SERVICE RESTART DEMONSTRATION
+          ==========================================
+          
+          Service commands:
+          $ systemctl start service-name
+          $ systemctl stop service-name
+          $ systemctl restart service-name
+          $ systemctl reload service-name      (reload config)
+          $ systemctl reload-or-restart        (smart restart)
+          $ systemctl status service-name
+          $ systemctl enable service-name
+          $ systemctl disable service-name
+          $ systemctl is-active service-name
+          $ systemctl is-enabled service-name
+          
+          In Ansible:
+          - Use systemd module for idempotency
+          - state: started/stopped/restarted
+          - enabled: yes/no
+          - daemon_reload: yes (after config changes)
+          
+          Note: This is a demonstration only
+          Actual restart would interrupt service
+          ==========================================
+
+    # ==========================================================
+    # TASK 5.20: Show socket services
+    # ==========================================================
+    - name: 5.20 - Show socket services
+      ansible.builtin.shell: "systemctl list-unit-files --type=socket --no-pager"
+      register: socket_services
+      changed_when: false
+
+    # ==========================================================
+    # TASK 5.21: Display socket services
+    # ==========================================================
+    - name: 5.21 - Display socket services
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          SOCKET SERVICES
+          ==========================================
+          Socket services use socket activation:
+          Service only starts when connection arrives
+          
+          Available sockets (sample):
+          {{ socket_services.stdout_lines[0:10] | join('\n') }}
+          
+          Benefits:
+          - Faster boot (lazy loading)
+          - Lower memory (services not running)
+          - Automatic start on demand
+          
+          Common socket services:
+          - dbus.socket: System message bus
+          - systemd-journal-dev.socket: Journal
+          - docker.socket: Docker daemon
+          
+          View socket details:
+          $ systemctl list-units --type=socket
+          $ systemctl show socket-name
+          ==========================================
+
+    # ==========================================================
+    # TASK 5.22: Show timer units
+    # ==========================================================
+    - name: 5.22 - Show timer units
+      ansible.builtin.shell: "systemctl list-unit-files --type=timer --no-pager"
+      register: timer_services
+      changed_when: false
+
+    # ==========================================================
+    # TASK 5.23: Display timer units
+    # ==========================================================
+    - name: 5.23 - Display timer units
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          SYSTEMD TIMERS (SCHEDULED TASKS)
+          ==========================================
+          Timers are systemd replacement for cron
+          More flexible and integrated with systemd
+          
+          Available timers (sample):
+          {{ timer_services.stdout_lines[0:10] | join('\n') }}
+          
+          Timer types:
+          - OnCalendar: Calendar-based (like cron)
+          - OnBootSec: After system boot
+          - OnUnitActiveSec: After service stops
+          - Persistent: Run missed timers on boot
+          
+          View timer status:
+          $ systemctl list-timers
+          $ systemctl list-timers --all
+          $ systemctl status timer-name.timer
+          
+          Calendar syntax:
+          - daily = *-*-* 00:00:00
+          - hourly = *-*-* *:00:00
+          - *-*-* 02:30:00 = 2:30 AM every day
+          - Mon *-*-* 09:00:00 = Monday at 9 AM
+          ==========================================
+
+    # ==========================================================
+    # TASK 5.24: Create custom service file
+    # ==========================================================
+    - name: 5.24 - Create custom service file (template)
+      ansible.builtin.copy:
+        content: |
+          [Unit]
+          Description=My Application Service
+          After=network.target
+          
+          [Service]
+          Type=simple
+          User=appuser
+          Group=appgroup
+          WorkingDirectory=/opt/app
+          ExecStart=/usr/local/bin/myapp
+          Restart=always
+          RestartSec=10
+          
+          [Install]
+          WantedBy=multi-user.target
+        dest: /etc/systemd/system/myapp.service
+        owner: root
+        group: root
+        mode: '0644'
+      register: custom_service
+
+    # ==========================================================
+    # TASK 5.25: Display custom service creation
+    # ==========================================================
+    - name: 5.25 - Display custom service creation
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          CUSTOM SERVICE FILE CREATED (TEMPLATE)
+          ==========================================
+          File: /etc/systemd/system/myapp.service
+          Status: {% if custom_service is changed %}Created{% else %}Already exists{% endif %}
+          
+          Service file structure:
+          
+          [Unit]
+          Description=Description of service
+          After=network.target           (dependencies)
+          Requires=other.service
+          
+          [Service]
+          Type=simple                    (service type)
+          Type=forking                   (daemon)
+          Type=oneshot                   (run once)
+          
+          User=appuser                   (run as user)
+          WorkingDirectory=/opt/app      (working dir)
+          ExecStart=/path/to/binary      (start command)
+          ExecReload=/path/to/reload     (reload command)
+          Restart=always                 (restart policy)
+          RestartSec=10                  (restart delay)
+          
+          [Install]
+          WantedBy=multi-user.target    (what depends on this)
+          ==========================================
+
+    # ==========================================================
+    # TASK 5.26: Reload systemd daemon
+    # ==========================================================
+    - name: 5.26 - Reload systemd daemon
+      ansible.builtin.systemd:
+        daemon_reload: yes
+
+    # ==========================================================
+    # TASK 5.27: Display systemd reload
+    # ==========================================================
+    - name: 5.27 - Display systemd reload
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          SYSTEMD DAEMON RELOAD
+          ==========================================
+          Status: ✓ Systemd daemon reloaded
+          
+          When to reload:
+          - After creating/modifying .service files
+          - After creating/modifying .timer files
+          - After creating/modifying .socket files
+          
+          Command:
+          $ systemctl daemon-reload
+          
+          This makes systemd aware of new/modified units
+          ==========================================
+
+    # ==========================================================
+    # TASK 5.28: Show service isolation
+    # ==========================================================
+    - name: 5.28 - Show service isolation
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          SERVICE ISOLATION & SECURITY
+          ==========================================
+          
+          Security features:
+          - PrivateTmp: /tmp isolated per service
+          - NoNewPrivileges: No privilege escalation
+          - PrivateDevices: Limited device access
+          - SystemCallFilter: Restrict syscalls
+          - CapabilityBoundingSet: Limit capabilities
+          
+          Example secure service:
+          [Service]
+          PrivateTmp=yes
+          NoNewPrivileges=yes
+          PrivateDevices=yes
+          ProtectSystem=strict
+          ProtectHome=yes
+          ReadWritePaths=/var/app/data
+          
+          View service settings:
+          $ systemctl show service-name
+          $ systemctl show -p Type service-name
+          
+          Check security level:
+          $ systemd-analyze security service-name
+          ==========================================
+
+    # ==========================================================
+    # TASK 5.29: Display resource limits
+    # ==========================================================
+    - name: 5.29 - Display resource limits
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          SERVICE RESOURCE LIMITS
+          ==========================================
+          
+          Resource control options:
+          - CPUAccounting=yes
+          - MemoryAccounting=yes
+          - CPUQuota=25%
+          - MemoryLimit=512M
+          - TasksMax=100
+          
+          Example with limits:
+          [Service]
+          CPUAccounting=yes
+          CPUQuota=50%
+          MemoryAccounting=yes
+          MemoryLimit=1G
+          TasksMax=50
+          
+          View resource usage:
+          $ systemctl status service-name
+          $ journalctl -u service-name
+          $ top (for real-time monitoring)
+          
+          Monitor all services:
+          $ systemd-cgtop
+          ==========================================
+
+    # ==========================================================
+    # TASK 5.30: Show systemd-analyze
+    # ==========================================================
+    - name: 5.30 - Show systemd boot analysis
+      ansible.builtin.shell: "systemd-analyze --no-pager 2>/dev/null | head -20"
+      register: boot_analysis
+      changed_when: false
+      failed_when: false
+
+    # ==========================================================
+    # TASK 5.31: Display boot analysis
+    # ==========================================================
+    - name: 5.31 - Display boot analysis
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          SYSTEMD-ANALYZE (BOOT PERFORMANCE)
+          ==========================================
+          Boot analysis (sample):
+          {{ boot_analysis.stdout }}
+          
+          Useful commands:
+          $ systemd-analyze          (total boot time)
+          $ systemd-analyze blame    (services by time)
+          $ systemd-analyze critical-chain (slowest chain)
+          $ systemd-analyze security (security check)
+          $ systemd-analyze plot > boot.svg (graph)
+          
+          Optimize boot:
+          1. Identify slow services
+          2. Set Type=notify for faster detection
+          3. Use socket activation
+          4. Parallelize independent services
+          5. Remove unnecessary services
+          ==========================================
+
+    # ==========================================================
+    # TASK 5.32: Display common issues
+    # ==========================================================
+    - name: 5.32 - Display common systemd issues
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          COMMON SYSTEMD ISSUES & SOLUTIONS
+          ==========================================
+          
+          Issue 1: Service fails to start
+          Solution:
+          - Check logs: journalctl -u service -n 50
+          - Verify ExecStart path exists
+          - Check user/group permissions
+          - Run: systemctl status service
+          
+          Issue 2: Service not starting on boot
+          Solution:
+          - Enable: systemctl enable service
+          - Check WantedBy= in [Install]
+          - Verify after= dependencies met
+          
+          Issue 3: Service restarts constantly
+          Solution:
+          - Check exit code in logs
+          - Set Restart=no temporarily
+          - Fix underlying issue
+          - Set RestartSec to delay restarts
+          
+          Issue 4: High boot time
+          Solution:
+          - Run systemd-analyze blame
+          - Set Type=notify if applicable
+          - Use socket activation
+          - Remove unnecessary services
+          
+          Issue 5: Cannot stop/restart service
+          Solution:
+          - Check for process locks
+          - Try systemctl kill service
+          - Check for infinite loops
+          - Review service logs
+          ==========================================
+
+    # ==========================================================
+    # TASK 5.33: Display management best practices
+    # ==========================================================
+    - name: 5.33 - Display service management best practices
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          SYSTEMD BEST PRACTICES
+          ==========================================
+          
+          Service File Best Practices:
+          ✓ Use systemd for all daemons
+          ✓ Set proper Type= (simple, forking, notify)
+          ✓ Run as unprivileged user when possible
+          ✓ Use PrivateTmp=yes for isolation
+          ✓ Set CPUQuota to limit resources
+          ✓ Use After= for dependencies
+          ✓ Set Restart policy appropriately
+          ✓ Document in Description=
+          
+          Deployment Practices:
+          ✓ Test service file locally first
+          ✓ Use systemd-analyze security
+          ✓ Check boot time with systemd-analyze
+          ✓ Monitor with journalctl
+          ✓ Version control service files
+          ✓ Document configuration
+          ✓ Test restart/reload procedures
+          
+          Security Practices:
+          ✓ Run as non-root when possible
+          ✓ Use PrivateDevices=yes
+          ✓ Use ProtectSystem=strict
+          ✓ Limit capabilities
+          ✓ Use RestrictNamespaces
+          ✓ Regular security audits
+          ✓ Keep systemd updated
+          ==========================================
+
+    # ==========================================================
+    # TASK 5.34: Create service management report
+    # ==========================================================
+    - name: 5.34 - Create service management report
+      ansible.builtin.copy:
+        content: |
+          ==========================================
+          SERVICE MANAGEMENT REPORT
+          ==========================================
+          Generated on: {{ ansible_date_time.iso8601 }}
+          Hostname: {{ inventory_hostname }}
+          OS: {{ ansible_os_family }} {{ ansible_distribution_version }}
+          
+          ==========================================
+          SYSTEM INFORMATION
+          ==========================================
+          Init System: systemd
+          Current Target: {{ current_target.stdout }}
+          Total Services: {{ ansible_facts.services | length }}
+          
+          ==========================================
+          MANAGED SERVICES
+          ==========================================
+          {% for item in system_services %}
+          Service: {{ item.display_name }} ({{ item.name }})
+          Description: {{ item.description }}
+          State: {{ item.state }}
+          Enabled: {{ item.enabled }}
+          Category: {{ item.category }}
+          
+          {% endfor %}
+          
+          ==========================================
+          SYSTEMD STRUCTURE
+          ==========================================
+          
+          Unit Types:
+          - .service: Services (daemons)
+          - .socket: Socket activation
+          - .timer: Scheduled execution
+          - .target: Grouping (runlevels)
+          - .mount: Filesystem mounts
+          - .slice: Resource control
+          
+          Key Directories:
+          - /etc/systemd/system/: User configs
+          - /usr/lib/systemd/system/: Package configs
+          - /run/systemd/: Runtime files
+          
+          ==========================================
+          COMMON COMMANDS
+          ==========================================
+          
+          Service Management:
+          $ systemctl start service-name
+          $ systemctl stop service-name
+          $ systemctl restart service-name
+          $ systemctl reload service-name
+          $ systemctl enable service-name
+          $ systemctl disable service-name
+          $ systemctl status service-name
+          
+          Monitoring:
+          $ systemctl list-units
+          $ systemctl list-units --failed
+          $ systemctl list-units --type=service
+          $ systemctl list-dependencies service-name
+          
+          Logging:
+          $ journalctl -u service-name
+          $ journalctl -f
+          $ journalctl --since "1 hour ago"
+          
+          Analysis:
+          $ systemd-analyze
+          $ systemd-analyze blame
+          $ systemd-analyze security
+          $ systemd-analyze plot > boot.svg
+          
+          ==========================================
+          CUSTOM SERVICE CREATION
+          ==========================================
+          
+          Steps:
+          1. Create .service file in /etc/systemd/system/
+          2. Define [Unit], [Service], [Install] sections
+          3. Run: systemctl daemon-reload
+          4. Run: systemctl enable service-name
+          5. Run: systemctl start service-name
+          6. Verify: systemctl status service-name
+          
+          Example service file:
+          [Unit]
+          Description=My Service
+          After=network.target
+          
+          [Service]
+          Type=simple
+          User=appuser
+          ExecStart=/usr/local/bin/myapp
+          Restart=always
+          
+          [Install]
+          WantedBy=multi-user.target
+          
+          ==========================================
+          SECURITY HARDENING
+          ==========================================
+          
+          Service Isolation:
+          - PrivateTmp=yes
+          - PrivateDevices=yes
+          - ProtectSystem=strict
+          - ProtectHome=yes
+          
+          Capability Limiting:
+          - CapabilityBoundingSet=~CAP_SYS_ADMIN
+          - NoNewPrivileges=yes
+          
+          System Call Filtering:
+          - SystemCallFilter=@system-service
+          - SystemCallErrorNumber=EPERM
+          
+          ==========================================
+          TROUBLESHOOTING
+          ==========================================
+          
+          Service won't start:
+          1. Check logs: journalctl -u service -n 50
+          2. Check file permissions
+          3. Verify ExecStart path
+          4. Test command manually
+          
+          Service restarts constantly:
+          1. Check exit code in logs
+          2. Fix underlying issue
+          3. Consider RestartSec delay
+          
+          High boot time:
+          1. Run: systemd-analyze blame
+          2. Identify slow units
+          3. Use socket activation
+          4. Parallelize services
+          
+          ==========================================
+          NEXT STEPS
+          ==========================================
+          
+          1. Review current services
+          2. Create custom service files as needed
+          3. Test service startup/restart
+          4. Monitor with journalctl
+          5. Optimize boot time
+          6. Implement security hardening
+          7. Document service configuration
+          8. Regular maintenance and updates
+          
+          ==========================================
+        dest: /tmp/chapter5_service_report.txt
+        owner: root
+        group: root
+        mode: '0644'
+
+    # ==========================================================
+    # TASK 5.35: Display report location
+    # ==========================================================
+    - name: 5.35 - Display report location
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          ✓ SERVICE MANAGEMENT REPORT GENERATED
+          ==========================================
+          Report Location: /tmp/chapter5_service_report.txt
+          
+          To view the report:
+            cat /tmp/chapter5_service_report.txt
+          
+          To copy report to control node:
+            scp root@{{ inventory_hostname }}:/tmp/chapter5_service_report.txt ./
+          
+          ==========================================
+
+    # ==========================================================
+    # TASK 5.36: Display service enable commands
+    # ==========================================================
+    - name: 5.36 - Display service enable/disable commands
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          SERVICE ENABLE/DISABLE COMMANDS
+          ==========================================
+          
+          Enable service (start on boot):
+          $ systemctl enable service-name
+          $ systemctl enable --now service-name (enable + start)
+          
+          Disable service (don't start on boot):
+          $ systemctl disable service-name
+          
+          Check if enabled:
+          $ systemctl is-enabled service-name
+          
+          View enabled services:
+          $ systemctl list-unit-files --state=enabled
+          $ systemctl list-unit-files --state=disabled
+          
+          In Ansible:
+          systemd:
+            name: service-name
+            enabled: yes      (or no)
+            state: started    (or stopped)
+          ==========================================
+
+    # ==========================================================
+    # TASK 5.37: Display journalctl tips
+    # ==========================================================
+    - name: 5.37 - Display journalctl (logging) tips
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          JOURNALCTL LOGGING TIPS
+          ==========================================
+          
+          View logs:
+          $ journalctl                    (all logs)
+          $ journalctl -n 50              (last 50 lines)
+          $ journalctl -f                 (follow/tail)
+          
+          Filter by service:
+          $ journalctl -u service-name
+          $ journalctl -u service-name -n 20
+          
+          Filter by priority:
+          $ journalctl -p err             (errors only)
+          $ journalctl -p warning,err     (warnings + errors)
+          
+          Time-based filters:
+          $ journalctl --since "2024-01-01"
+          $ journalctl --since "1 hour ago"
+          $ journalctl --until "30 minutes ago"
+          
+          Show boot logs:
+          $ journalctl -b                 (current boot)
+          $ journalctl -b -1              (previous boot)
+          $ journalctl --list-boots       (all boots)
+          
+          Export logs:
+          $ journalctl -o export > logs.bin
+          $ journalctl -o json            (JSON format)
+          $ journalctl -o short-iso       (ISO timestamps)
+          
+          Combine filters:
+          $ journalctl -u service-name -p err -n 20 -f
+          ==========================================
+
+    # ==========================================================
+    # TASK 5.38: Display systemd socket services
+    # ==========================================================
+    - name: 5.38 - Display socket activation explanation
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          SOCKET ACTIVATION
+          ==========================================
+          
+          What is socket activation?
+          - Service doesn't run until needed
+          - Systemd listens on socket
+          - Service starts when connection arrives
+          - Reduces boot time and memory usage
+          
+          Benefits:
+          - Faster boot
+          - Lower memory usage
+          - Service starts on demand
+          - Automatic restart
+          - Transparent to applications
+          
+          Socket file example:
+          [Unit]
+          Description=My Service Socket
+          Before=multi-user.target
+          
+          [Socket]
+          ListenStream=9000
+          Accept=yes
+          
+          [Install]
+          WantedBy=sockets.target
+          
+          View active sockets:
+          $ systemctl list-sockets
+          $ systemctl list-units --type=socket
+          
+          Check socket status:
+          $ systemctl status socket-name.socket
+          ==========================================
+
+    # ==========================================================
+    # TASK 5.39: Display target dependencies
+    # ==========================================================
+    - name: 5.39 - Display target and runlevel information
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          SYSTEMD TARGETS & RUNLEVELS
+          ==========================================
+          
+          Runlevel to Target mapping:
+          runlevel 0 → poweroff.target
+          runlevel 1 → rescue.target
+          runlevel 2 → multi-user.target (no graphics)
+          runlevel 3 → multi-user.target (no graphics)
+          runlevel 4 → multi-user.target (unused)
+          runlevel 5 → graphical.target (with graphics)
+          runlevel 6 → reboot.target
+          
+          Get default target:
+          $ systemctl get-default
+          
+          Set default target:
+          $ systemctl set-default graphical.target
+          $ systemctl set-default multi-user.target
+          
+          Change target on fly:
+          $ systemctl isolate multi-user.target
+          $ systemctl isolate graphical.target
+          
+          View target dependencies:
+          $ systemctl list-dependencies multi-user.target
+          $ systemctl list-dependencies --all multi-user.target
+          
+          Important targets:
+          - poweroff.target: Shutdown
+          - rescue.target: Single user/maintenance
+          - multi-user.target: Command line
+          - graphical.target: GUI desktop
+          - emergency.target: Emergency shell
+          - reboot.target: Reboot
+          ==========================================
+
+    # ==========================================================
+    # TASK 5.40: Show final execution summary
+    # ==========================================================
+    - name: 5.40 - Show final execution summary
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          ✓ CHAPTER 5 EXECUTION COMPLETE
+          ==========================================
+          
+          EXECUTION STATISTICS:
+          - Total Tasks Executed: 40
+          - Host: {{ inventory_hostname }}
+          - OS: {{ ansible_os_family }} {{ ansible_distribution_version }}
+          - Execution Time: {{ ansible_date_time.iso8601 }}
+          
+          SUMMARY:
+          
+          SYSTEM INFORMATION:
+          - Init System: systemd
+          - Current Target: {{ current_target.stdout }}
+          - Total Services: {{ ansible_facts.services | length }}
+          
+          SERVICES MANAGED:
+          ✓ sshd: System service (running)
+          ✓ firewalld: Firewall daemon (running)
+          ✓ chronyd: NTP daemon (running)
+          
+          CONCEPTS COVERED:
+          ✓ systemd basics and architecture
+          ✓ Service management commands
+          ✓ Service enable/disable
+          ✓ Service start/stop/restart
+          ✓ Service status monitoring
+          ✓ Service dependencies
+          ✓ Socket services (lazy loading)
+          ✓ Timer services (scheduled tasks)
+          ✓ Custom service creation
+          ✓ Service isolation & security
+          ✓ Resource limiting
+          ✓ Boot analysis & optimization
+          ✓ Logging with journalctl
+          ✓ Troubleshooting services
+          ✓ Best practices
+          
+          NEXT STEPS:
+          1. Review the generated report:
+             cat /tmp/chapter5_service_report.txt
+          
+          2. Check service status:
+             systemctl status sshd
+             systemctl status firewalld
+          
+          3. View service logs:
+             journalctl -u sshd -n 20
+             journalctl -u firewalld -n 20
+          
+          4. Analyze boot performance:
+             systemd-analyze
+             systemd-analyze blame
+          
+          5. Create custom services:
+             systemctl daemon-reload
+             systemctl enable myapp.service
+          
+          6. Monitor services:
+             systemctl list-units --failed
+             systemctl list-timers
+          
+          7. View socket services:
+             systemctl list-sockets
+          
+          8. Troubleshoot issues:
+             journalctl -xe
+             systemctl status failed-service
+          
+          ==========================================
+          Status: ✓ SUCCESS
+          ==========================================
+
+# ============================================================
+# CHAPTER 5 PLAYBOOK COMPLETE
+# ============================================================
+# To run this playbook:
+#
+#   1. Check syntax:
+#      ansible-playbook -i inventory.ini CHAPTER-5-EXECUTABLE.yml --syntax-check
+#
+#   2. Dry run (see what will change):
+#      ansible-playbook -i inventory.ini CHAPTER-5-EXECUTABLE.yml --check
+#
+#   3. Execute playbook:
+#      ansible-playbook -i inventory.ini CHAPTER-5-EXECUTABLE.yml -v
+#
+#   4. Execute with detailed output:
+#      ansible-playbook -i inventory.ini CHAPTER-5-EXECUTABLE.yml -vvv
+#
+# Manual verification after playbook:
+#
+#   systemctl status sshd              # Check service status
+#   systemctl is-enabled sshd          # Check if enabled
+#   journalctl -u sshd -n 10           # View service logs
+#   systemd-analyze                    # Boot analysis
+#   cat /tmp/chapter5_service_report.txt  # View report
+#
+# ============================================================
+
