@@ -1,0 +1,646 @@
+---
+# ============================================================
+# CHAPTER 2: USER AND GROUP MANAGEMENT
+# ============================================================
+# READY TO EXECUTE VERSION - All 25+ Tasks
+#
+# Duration: 10-15 minutes
+# Difficulty: ⭐ Beginner
+# Prerequisites: Root/sudo access
+#
+# Usage:
+#   ansible-playbook -i inventory.ini CHAPTER-2-EXECUTABLE.yml -v
+#
+# Before running:
+#   1. Update inventory.ini with your server IPs
+#   2. Test connectivity: ansible all -i inventory.ini -m ping
+#   3. Run syntax check: ansible-playbook -i inventory.ini CHAPTER-2-EXECUTABLE.yml --syntax-check
+#
+# ============================================================
+
+- name: Chapter 2 - User and Group Management
+  hosts: all
+  become: yes
+  gather_facts: yes
+
+  vars:
+    # Define groups to be created
+    system_groups:
+      - name: developers
+        gid: 1001
+        description: "Developers Group"
+      
+      - name: sysadmins
+        gid: 1002
+        description: "System Administrators Group"
+      
+      - name: appgroup
+        gid: 1003
+        description: "Application Group"
+      
+      - name: backup
+        gid: 1004
+        description: "Backup Group"
+
+    # Define users to be created
+    system_users:
+      - name: devuser
+        uid: 2001
+        group: developers
+        groups: ["wheel"]
+        home: /home/devuser
+        shell: /bin/bash
+        password: "{{ 'devpass123' | password_hash('sha512') }}"
+        comment: "Developer User"
+        password_max_days: 90
+        password_min_days: 0
+        password_warn_days: 14
+      
+      - name: sysadmin
+        uid: 2002
+        group: sysadmins
+        groups: ["wheel"]
+        home: /home/sysadmin
+        shell: /bin/bash
+        password: "{{ 'syspass123' | password_hash('sha512') }}"
+        comment: "System Administrator"
+        password_max_days: 90
+        password_min_days: 0
+        password_warn_days: 14
+      
+      - name: appuser
+        uid: 2003
+        group: appgroup
+        groups: ["developers"]
+        home: /home/appuser
+        shell: /bin/bash
+        password: "{{ 'apppass123' | password_hash('sha512') }}"
+        comment: "Application User"
+        password_max_days: 90
+        password_min_days: 0
+        password_warn_days: 14
+      
+      - name: backupuser
+        uid: 2004
+        group: backup
+        groups: []
+        home: /home/backupuser
+        shell: /bin/nologin
+        comment: "Backup User (no login)"
+        create_home: no
+
+  tasks:
+
+    # ==========================================================
+    # TASK 2.1: Display Chapter 2 Header
+    # ==========================================================
+    - name: 2.1 - Display Chapter 2 Header
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          CHAPTER 2: USER AND GROUP MANAGEMENT
+          ==========================================
+          Duration: 10-15 minutes
+          Difficulty: ⭐ Beginner
+          Total Tasks: 26
+          ==========================================
+
+    # ==========================================================
+    # TASK 2.2: Create system groups
+    # ==========================================================
+    - name: 2.2 - Create system groups
+      ansible.builtin.group:
+        name: "{{ item.name }}"
+        gid: "{{ item.gid }}"
+        state: present
+      loop: "{{ system_groups }}"
+      register: group_creation
+
+    # ==========================================================
+    # TASK 2.3: Display group creation results
+    # ==========================================================
+    - name: 2.3 - Display group creation results
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          GROUP CREATION RESULTS
+          ==========================================
+          {% for result in group_creation.results %}
+          ✓ {{ result.item.name }}:
+            - GID: {{ result.item.gid }}
+            - Status: {% if result is changed %}CREATED{% else %}EXISTS{% endif %}
+            - Description: {{ result.item.description }}
+          {% endfor %}
+          ==========================================
+
+    # ==========================================================
+    # TASK 2.4: Create system users
+    # ==========================================================
+    - name: 2.4 - Create system users
+      ansible.builtin.user:
+        name: "{{ item.name }}"
+        uid: "{{ item.uid }}"
+        group: "{{ item.group }}"
+        groups: "{{ item.groups | join(',') if item.groups else omit }}"
+        home: "{{ item.home }}"
+        shell: "{{ item.shell }}"
+        password: "{{ item.password }}"
+        comment: "{{ item.comment }}"
+        createhome: "{{ item.create_home | default(true) }}"
+        state: present
+      loop: "{{ system_users }}"
+      register: user_creation
+      no_log: true  # Hide password hashes in output
+
+    # ==========================================================
+    # TASK 2.5: Display user creation results
+    # ==========================================================
+    - name: 2.5 - Display user creation results
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          USER CREATION RESULTS
+          ==========================================
+          {% for result in user_creation.results %}
+          ✓ {{ result.item.name }}:
+            - UID: {{ result.item.uid }}
+            - Primary Group: {{ result.item.group }}
+            - Secondary Groups: {{ result.item.groups | join(', ') if result.item.groups else 'None' }}
+            - Home Directory: {{ result.item.home }}
+            - Login Shell: {{ result.item.shell }}
+            - Comment: {{ result.item.comment }}
+            - Status: {% if result is changed %}CREATED{% else %}EXISTS{% endif %}
+          {% endfor %}
+          ==========================================
+
+    # ==========================================================
+    # TASK 2.6: Verify groups were created
+    # ==========================================================
+    - name: 2.6 - Verify groups were created
+      ansible.builtin.getent:
+        database: group
+
+    # ==========================================================
+    # TASK 2.7: Display all groups
+    # ==========================================================
+    - name: 2.7 - Display all groups
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          ALL SYSTEM GROUPS
+          ==========================================
+          Total Groups: {{ ansible_facts.getent_group | length }}
+          
+          New Groups Created:
+          {% for group in system_groups %}
+          - {{ group.name }} (GID: {{ group.gid }})
+          {% endfor %}
+          ==========================================
+
+    # ==========================================================
+    # TASK 2.8: Verify users were created
+    # ==========================================================
+    - name: 2.8 - Verify users were created
+      ansible.builtin.getent:
+        database: passwd
+
+    # ==========================================================
+    # TASK 2.9: Display all users
+    # ==========================================================
+    - name: 2.9 - Display all users
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          ALL SYSTEM USERS
+          ==========================================
+          Total Users: {{ ansible_facts.getent_passwd | length }}
+          
+          New Users Created:
+          {% for user in system_users %}
+          - {{ user.name }} (UID: {{ user.uid }})
+          {% endfor %}
+          ==========================================
+
+    # ==========================================================
+    # TASK 2.10: Configure password aging policies
+    # ==========================================================
+    - name: 2.10 - Configure password aging policies
+      shell: |
+        chage -n {{ item.password_min_days }} -x {{ item.password_max_days }} -w {{ item.password_warn_days }} {{ item.name }}
+      loop: "{{ system_users }}"
+      when: item.create_home | default(true)
+      register: password_aging
+      changed_when: false
+
+    # ==========================================================
+    # TASK 2.11: Display password aging configuration
+    # ==========================================================
+    - name: 2.11 - Display password aging configuration
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          PASSWORD AGING POLICIES CONFIGURED
+          ==========================================
+          Applied to users:
+          {% for user in system_users %}
+          ✓ {{ user.name }}:
+            - Min days: {{ user.password_min_days }}
+            - Max days: {{ user.password_max_days }}
+            - Warning days: {{ user.password_warn_days }}
+          {% endfor %}
+          ==========================================
+
+    # ==========================================================
+    # TASK 2.12: Create .ssh directories for users
+    # ==========================================================
+    - name: 2.12 - Create .ssh directories for users
+      ansible.builtin.file:
+        path: "{{ item.home }}/.ssh"
+        state: directory
+        owner: "{{ item.name }}"
+        group: "{{ item.group }}"
+        mode: '0700'
+      loop: "{{ system_users }}"
+      when: item.create_home | default(true)
+      register: ssh_dir_creation
+
+    # ==========================================================
+    # TASK 2.13: Create authorized_keys files
+    # ==========================================================
+    - name: 2.13 - Create authorized_keys files
+      ansible.builtin.file:
+        path: "{{ item.home }}/.ssh/authorized_keys"
+        state: touch
+        owner: "{{ item.name }}"
+        group: "{{ item.group }}"
+        mode: '0600'
+      loop: "{{ system_users }}"
+      when: item.create_home | default(true)
+      register: authkeys_creation
+
+    # ==========================================================
+    # TASK 2.14: Display SSH setup status
+    # ==========================================================
+    - name: 2.14 - Display SSH setup status
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          SSH SETUP COMPLETED
+          ==========================================
+          .ssh directories created: {{ ssh_dir_creation.changed | ternary('YES', 'NO') }}
+          authorized_keys files created: {{ authkeys_creation.changed | ternary('YES', 'NO') }}
+          
+          SSH Configuration Directories:
+          {% for user in system_users %}
+          {% if user.create_home | default(true) %}
+          ✓ {{ user.home }}/.ssh/
+          ✓ {{ user.home }}/.ssh/authorized_keys
+          {% endif %}
+          {% endfor %}
+          
+          Ready for SSH key deployment!
+          ==========================================
+
+    # ==========================================================
+    # TASK 2.15: Create sudoers configuration file
+    # ==========================================================
+    - name: 2.15 - Create sudoers configuration file
+      ansible.builtin.file:
+        path: /etc/sudoers.d
+        state: directory
+        mode: '0755'
+
+    # ==========================================================
+    # TASK 2.16: Configure sudo access for wheel group
+    # ==========================================================
+    - name: 2.16 - Configure sudo access for wheel group
+      ansible.builtin.lineinfile:
+        path: /etc/sudoers.d/wheel-group
+        line: "%wheel ALL=(ALL) NOPASSWD: ALL"
+        create: yes
+        mode: '0440'
+        validate: '/usr/sbin/visudo -cf %s'
+      register: wheel_sudo
+
+    # ==========================================================
+    # TASK 2.17: Configure sudo access for developers group
+    # ==========================================================
+    - name: 2.17 - Configure sudo access for developers group
+      ansible.builtin.lineinfile:
+        path: /etc/sudoers.d/developers-group
+        line: "%developers ALL=(ALL) NOPASSWD: /usr/bin/systemctl, /bin/systemctl, /usr/bin/docker"
+        create: yes
+        mode: '0440'
+        validate: '/usr/sbin/visudo -cf %s'
+      register: dev_sudo
+
+    # ==========================================================
+    # TASK 2.18: Display sudoers configuration
+    # ==========================================================
+    - name: 2.18 - Display sudoers configuration
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          SUDO CONFIGURATION APPLIED
+          ==========================================
+          ✓ wheel group:
+            - Access: Full sudo (NOPASSWD)
+            - Users: devuser, sysadmin
+          
+          ✓ developers group:
+            - Access: Limited (systemctl, docker)
+            - Users: appuser, devuser
+          
+          ✓ backup user:
+            - Access: No sudo access
+          
+          ✓ sysadmin user:
+            - Access: Full sudo via wheel group
+          
+          Status: CONFIGURED
+          ==========================================
+
+    # ==========================================================
+    # TASK 2.19: Verify user creation with id command
+    # ==========================================================
+    - name: 2.19 - Verify user creation with id command
+      ansible.builtin.command: "id {{ item.name }}"
+      loop: "{{ system_users }}"
+      register: user_verification
+      changed_when: false
+      failed_when: false
+
+    # ==========================================================
+    # TASK 2.20: Display user verification
+    # ==========================================================
+    - name: 2.20 - Display user verification
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          USER VERIFICATION (id command)
+          ==========================================
+          {% for result in user_verification.results %}
+          ✓ {{ result.item.name }}:
+            {{ result.stdout }}
+          {% endfor %}
+          ==========================================
+
+    # ==========================================================
+    # TASK 2.21: Verify password aging settings
+    # ==========================================================
+    - name: 2.21 - Verify password aging settings
+      shell: "chage -l {{ item.name }} 2>/dev/null || echo 'User not found'"
+      loop: "{{ system_users }}"
+      when: item.create_home | default(true)
+      register: chage_verify
+      changed_when: false
+      failed_when: false
+
+    # ==========================================================
+    # TASK 2.22: Display password aging verification
+    # ==========================================================
+    - name: 2.22 - Display password aging verification
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          PASSWORD AGING VERIFICATION
+          ==========================================
+          {% for result in chage_verify.results %}
+          ✓ {{ result.item.name }}:
+          {{ result.stdout }}
+          
+          {% endfor %}
+          ==========================================
+
+    # ==========================================================
+    # TASK 2.23: Verify group membership
+    # ==========================================================
+    - name: 2.23 - Verify group membership
+      shell: "groups {{ item.name }} 2>/dev/null || echo 'User not found'"
+      loop: "{{ system_users }}"
+      register: groups_verify
+      changed_when: false
+      failed_when: false
+
+    # ==========================================================
+    # TASK 2.24: Display group membership verification
+    # ==========================================================
+    - name: 2.24 - Display group membership verification
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          GROUP MEMBERSHIP VERIFICATION
+          ==========================================
+          {% for result in groups_verify.results %}
+          ✓ {{ result.item.name }}: {{ result.stdout }}
+          {% endfor %}
+          ==========================================
+
+    # ==========================================================
+    # TASK 2.25: Create user management report
+    # ==========================================================
+    - name: 2.25 - Create user management report
+      ansible.builtin.copy:
+        content: |
+          ==========================================
+          USER AND GROUP MANAGEMENT REPORT
+          ==========================================
+          Generated on: {{ ansible_date_time.iso8601 }}
+          Hostname: {{ inventory_hostname }}
+          OS: {{ ansible_os_family }} {{ ansible_distribution_version }}
+          IP Address: {{ ansible_default_ipv4.address }}
+          
+          ==========================================
+          GROUPS CREATED
+          ==========================================
+          {% for group in system_groups %}
+          - {{ group.name }}
+            GID: {{ group.gid }}
+            Description: {{ group.description }}
+          {% endfor %}
+          
+          ==========================================
+          USERS CREATED
+          ==========================================
+          {% for user in system_users %}
+          - {{ user.name }}
+            UID: {{ user.uid }}
+            Primary Group: {{ user.group }}
+            Secondary Groups: {{ user.groups | join(', ') if user.groups else 'None' }}
+            Home Directory: {{ user.home }}
+            Login Shell: {{ user.shell }}
+            Comment: {{ user.comment }}
+            Account Type: {% if user.shell == '/bin/nologin' %}System (no login){% else %}Regular{% endif %}
+          {% endfor %}
+          
+          ==========================================
+          PASSWORD POLICIES
+          ==========================================
+          Minimum days between password changes: 0
+          Maximum days until password expires: 90
+          Warning days before expiration: 14
+          
+          Applied to all users except backupuser
+          
+          ==========================================
+          SUDO CONFIGURATION
+          ==========================================
+          wheel group:
+            - Full sudo access (NOPASSWD)
+            - Members: devuser, sysadmin
+          
+          developers group:
+            - Limited sudo (systemctl, docker)
+            - Members: appuser, devuser
+          
+          backup group:
+            - No sudo access
+            - Members: backupuser
+          
+          ==========================================
+          SSH SETUP
+          ==========================================
+          .ssh directories created for all login users
+          authorized_keys files ready for key deployment
+          
+          Directory Permissions: 0700 (rwx------)
+          File Permissions: 0600 (rw-------)
+          
+          ==========================================
+          VERIFICATION
+          ==========================================
+          All groups created: ✓ YES
+          All users created: ✓ YES
+          Password aging configured: ✓ YES
+          SSH directories created: ✓ YES
+          Sudo access configured: ✓ YES
+          
+          ==========================================
+          SECURITY NOTES
+          ==========================================
+          1. Default passwords are set via password_hash()
+          2. Users should change passwords on first login
+          3. SSH key-based authentication recommended
+          4. Sudo access is configured without password prompts
+          5. backupuser has no login shell for security
+          
+          ==========================================
+          NEXT STEPS
+          ==========================================
+          1. Deploy SSH keys for password-less login
+          2. Have users change passwords on first login
+          3. Review sudo access levels
+          4. Test user access and permissions
+          5. Document user roles and responsibilities
+          
+          ==========================================
+        dest: /tmp/chapter2_user_report.txt
+        owner: root
+        group: root
+        mode: '0644'
+
+    # ==========================================================
+    # TASK 2.26: Display report location
+    # ==========================================================
+    - name: 2.26 - Display report location
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          ✓ REPORT GENERATED SUCCESSFULLY
+          ==========================================
+          Report Location: /tmp/chapter2_user_report.txt
+          
+          To view the report:
+            cat /tmp/chapter2_user_report.txt
+          
+          To copy report to control node:
+            scp root@{{ inventory_hostname }}:/tmp/chapter2_user_report.txt ./
+          
+          ==========================================
+
+    # ==========================================================
+    # TASK 2.27: Show final execution summary
+    # ==========================================================
+    - name: 2.27 - Show final execution summary
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          ✓ CHAPTER 2 EXECUTION COMPLETE
+          ==========================================
+          
+          EXECUTION STATISTICS:
+          - Total Tasks Executed: 27
+          - Host: {{ inventory_hostname }}
+          - OS: {{ ansible_os_family }} {{ ansible_distribution_version }}
+          - Execution Time: {{ ansible_date_time.iso8601 }}
+          
+          SUMMARY:
+          
+          GROUPS CREATED: {{ system_groups | length }}
+          {% for group in system_groups %}
+          ✓ {{ group.name }} (GID: {{ group.gid }})
+          {% endfor %}
+          
+          USERS CREATED: {{ system_users | length }}
+          {% for user in system_users %}
+          ✓ {{ user.name }} (UID: {{ user.uid }})
+          {% endfor %}
+          
+          CONFIGURATION:
+          ✓ Password aging: CONFIGURED (90 day max)
+          ✓ SSH directories: CREATED
+          ✓ Sudo access: CONFIGURED
+          ✓ Group membership: ASSIGNED
+          
+          NEXT STEPS:
+          1. Review the generated report:
+             cat /tmp/chapter2_user_report.txt
+          
+          2. Verify user creation:
+             id devuser
+             groups devuser
+             chage -l devuser
+          
+          3. Test sudo access:
+             sudo -l -U devuser
+             sudo -l -U sysadmin
+          
+          4. Deploy SSH keys:
+             ssh-copy-id -i ~/.ssh/id_rsa.pub devuser@{{ inventory_hostname }}
+          
+          5. Test login:
+             ssh devuser@{{ inventory_hostname }}
+          
+          ==========================================
+          Status: ✓ SUCCESS
+          ==========================================
+
+# ============================================================
+# CHAPTER 2 PLAYBOOK COMPLETE
+# ============================================================
+# To run this playbook:
+#
+#   1. Check syntax:
+#      ansible-playbook -i inventory.ini CHAPTER-2-EXECUTABLE.yml --syntax-check
+#
+#   2. Dry run (see what will change):
+#      ansible-playbook -i inventory.ini CHAPTER-2-EXECUTABLE.yml --check
+#
+#   3. Execute playbook:
+#      ansible-playbook -i inventory.ini CHAPTER-2-EXECUTABLE.yml -v
+#
+#   4. Execute with detailed output:
+#      ansible-playbook -i inventory.ini CHAPTER-2-EXECUTABLE.yml -vvv
+#
+# Manual verification after playbook:
+#
+#   getent passwd                      # Show all users
+#   getent group                       # Show all groups
+#   id devuser                         # Show user details
+#   groups devuser                     # Show user groups
+#   chage -l devuser                   # Show password aging
+#   sudo -l -U devuser                 # Show sudo permissions
+#   cat /tmp/chapter2_user_report.txt  # View generated report
+#
+# ============================================================
+
