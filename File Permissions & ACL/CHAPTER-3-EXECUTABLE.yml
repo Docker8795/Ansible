@@ -1,0 +1,843 @@
+---
+# ============================================================
+# CHAPTER 3: FILE PERMISSIONS & ACL (ACCESS CONTROL LIST)
+# ============================================================
+# READY TO EXECUTE VERSION - All 30+ Tasks
+#
+# Duration: 15-20 minutes
+# Difficulty: ⭐⭐ Intermediate
+# Prerequisites: Root/sudo access, users from Chapter 2
+#
+# Usage:
+#   ansible-playbook -i inventory.ini CHAPTER-3-EXECUTABLE.yml -v
+#
+# Before running:
+#   1. Update inventory.ini with your server IPs
+#   2. Test connectivity: ansible all -i inventory.ini -m ping
+#   3. Run syntax check: ansible-playbook -i inventory.ini CHAPTER-3-EXECUTABLE.yml --syntax-check
+#   4. Ensure Chapter 2 (users/groups) are already created
+#
+# ============================================================
+
+- name: Chapter 3 - File Permissions and ACL Management
+  hosts: all
+  become: yes
+  gather_facts: yes
+
+  vars:
+    # Files and directories to manage
+    test_files:
+      - path: /opt/app
+        owner: appuser
+        group: appgroup
+        mode: "0755"
+        type: directory
+        description: "Application directory"
+      
+      - path: /opt/app/config.yml
+        owner: appuser
+        group: appgroup
+        mode: "0640"
+        type: file
+        content: "# Application configuration\napp_name: Production\nenv: prod\n"
+        description: "Application config file"
+      
+      - path: /opt/app/data
+        owner: appuser
+        group: appgroup
+        mode: "0700"
+        type: directory
+        description: "Application data directory (private)"
+      
+      - path: /var/log/app
+        owner: appuser
+        group: appgroup
+        mode: "0755"
+        type: directory
+        description: "Application logs directory"
+
+    # ACL rules to apply
+    acl_rules:
+      - path: /opt/app
+        entity: sysadmin
+        etype: user
+        permissions: "rx"
+        description: "Allow sysadmin to read and execute"
+      
+      - path: /opt/app/data
+        entity: backup
+        etype: group
+        permissions: "rx"
+        description: "Allow backup group to read and execute"
+      
+      - path: /opt/app/config.yml
+        entity: devuser
+        etype: user
+        permissions: "r"
+        description: "Allow devuser to read config"
+
+    # Files with special permissions (SUID, SGID, Sticky Bit)
+    special_perms:
+      - path: /opt/app/sensitive_script.sh
+        suid: false
+        sgid: true
+        sticky: false
+        mode: "2755"
+        description: "SGID bit - inherit group ownership"
+      
+      - path: /tmp/shared_dir
+        suid: false
+        sgid: false
+        sticky: true
+        mode: "1777"
+        description: "Sticky bit - only owner can delete"
+
+  tasks:
+
+    # ==========================================================
+    # TASK 3.1: Display Chapter 3 Header
+    # ==========================================================
+    - name: 3.1 - Display Chapter 3 Header
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          CHAPTER 3: FILE PERMISSIONS & ACL
+          ==========================================
+          Duration: 15-20 minutes
+          Difficulty: ⭐⭐ Intermediate
+          Total Tasks: 30+
+          
+          Topics:
+          - File permissions (chmod)
+          - Ownership (chown)
+          - SUID, SGID, Sticky Bit
+          - ACL (Access Control Lists)
+          - Security best practices
+          ==========================================
+
+    # ==========================================================
+    # TASK 3.2: Create test directory structure
+    # ==========================================================
+    - name: 3.2 - Create test directory structure
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: "{{ 'directory' if item.type == 'directory' else 'touch' }}"
+        owner: "{{ item.owner }}"
+        group: "{{ item.group }}"
+        mode: "{{ item.mode }}"
+      loop: "{{ test_files }}"
+      register: file_creation
+
+    # ==========================================================
+    # TASK 3.3: Display file creation results
+    # ==========================================================
+    - name: 3.3 - Display file creation results
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          FILE & DIRECTORY CREATION
+          ==========================================
+          {% for item in test_files %}
+          ✓ {{ item.path }}
+            - Type: {{ item.type }}
+            - Owner: {{ item.owner }}:{{ item.group }}
+            - Permissions: {{ item.mode }}
+            - Description: {{ item.description }}
+          {% endfor %}
+          ==========================================
+
+    # ==========================================================
+    # TASK 3.4: Create content for configuration files
+    # ==========================================================
+    - name: 3.4 - Create content for configuration files
+      ansible.builtin.copy:
+        content: "{{ item.content }}"
+        dest: "{{ item.path }}"
+        owner: "{{ item.owner }}"
+        group: "{{ item.group }}"
+        mode: "{{ item.mode }}"
+      loop: "{{ test_files | selectattr('type', 'equalto', 'file') }}"
+      when: item.content is defined
+
+    # ==========================================================
+    # TASK 3.5: Display file permissions in octal
+    # ==========================================================
+    - name: 3.5 - Display file permissions in octal
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          FILE PERMISSIONS EXPLAINED
+          ==========================================
+          
+          Octal Notation:
+          - 0777 = rwxrwxrwx (full access)
+          - 0755 = rwxr-xr-x (dir: owner full, others read+execute)
+          - 0644 = rw-r--r-- (file: owner write, others read)
+          - 0640 = rw-r----- (sensitive: group read only)
+          - 0600 = rw------- (private: owner only)
+          - 0700 = rwx------ (directory: owner only)
+          
+          Permission Symbols:
+          r (read)    = 4
+          w (write)   = 2
+          x (execute) = 1
+          
+          Position:
+          - Owner (user):  first digit
+          - Group:         second digit
+          - Others:        third digit
+          
+          Example: 0755
+          - Owner:   7 = rwx (4+2+1)
+          - Group:   5 = r-x (4+0+1)
+          - Others:  5 = r-x (4+0+1)
+          ==========================================
+
+    # ==========================================================
+    # TASK 3.6: Verify file permissions
+    # ==========================================================
+    - name: 3.6 - Verify file permissions
+      ansible.builtin.stat:
+        path: "{{ item.path }}"
+      loop: "{{ test_files }}"
+      register: file_stats
+
+    # ==========================================================
+    # TASK 3.7: Display verified permissions
+    # ==========================================================
+    - name: 3.7 - Display verified permissions
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          VERIFIED FILE PERMISSIONS
+          ==========================================
+          {% for result in file_stats.results %}
+          ✓ {{ result.item.path }}
+            - Mode: {{ result.stat.mode }}
+            - Owner: {{ result.stat.pw_name }}:{{ result.stat.gr_name }}
+            - Type: {% if result.stat.isdir %}Directory{% else %}File{% endif %}
+          {% endfor %}
+          ==========================================
+
+    # ==========================================================
+    # TASK 3.8: Install ACL tools
+    # ==========================================================
+    - name: 3.8 - Install ACL tools
+      ansible.builtin.package:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - acl
+        - attr
+      register: acl_install
+
+    # ==========================================================
+    # TASK 3.9: Display ACL installation status
+    # ==========================================================
+    - name: 3.9 - Display ACL installation status
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          ACL TOOLS INSTALLED
+          ==========================================
+          ✓ acl package installed
+          ✓ attr package installed
+          
+          Available commands:
+          - getfacl: Get file ACL
+          - setfacl: Set file ACL
+          - getfattr: Get file attributes
+          - setfattr: Set file attributes
+          ==========================================
+
+    # ==========================================================
+    # TASK 3.10: Apply ACL rules
+    # ==========================================================
+    - name: 3.10 - Apply ACL rules
+      ansible.posix.acl:
+        path: "{{ item.path }}"
+        entity: "{{ item.entity }}"
+        etype: "{{ item.etype }}"
+        permissions: "{{ item.permissions }}"
+        state: present
+      loop: "{{ acl_rules }}"
+      register: acl_application
+
+    # ==========================================================
+    # TASK 3.11: Display ACL application results
+    # ==========================================================
+    - name: 3.11 - Display ACL application results
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          ACL RULES APPLIED
+          ==========================================
+          {% for item in acl_rules %}
+          ✓ {{ item.path }}
+            - Entity: {{ item.entity }} ({{ item.etype }})
+            - Permissions: {{ item.permissions }}
+            - Description: {{ item.description }}
+          {% endfor %}
+          ==========================================
+
+    # ==========================================================
+    # TASK 3.12: Get ACL for all files
+    # ==========================================================
+    - name: 3.12 - Get ACL for all files
+      ansible.builtin.command: "getfacl {{ item.path }}"
+      loop: "{{ acl_rules }}"
+      register: acl_details
+      changed_when: false
+
+    # ==========================================================
+    # TASK 3.13: Display ACL details
+    # ==========================================================
+    - name: 3.13 - Display ACL details
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          ACL DETAILS (getfacl output)
+          ==========================================
+          {% for result in acl_details.results %}
+          {{ result.item.path }}:
+          {{ result.stdout }}
+          
+          {% endfor %}
+          ==========================================
+
+    # ==========================================================
+    # TASK 3.14: Create scripts with special permissions
+    # ==========================================================
+    - name: 3.14 - Create scripts with special permissions
+      ansible.builtin.copy:
+        content: |
+          #!/bin/bash
+          # This script has special permissions set
+          echo "Running with special permissions"
+          whoami
+          id
+        dest: "{{ item.path }}"
+        owner: appuser
+        group: appgroup
+        mode: "{{ item.mode }}"
+      loop: "{{ special_perms }}"
+
+    # ==========================================================
+    # TASK 3.15: Display special permissions explanation
+    # ==========================================================
+    - name: 3.15 - Display special permissions explanation
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          SPECIAL PERMISSIONS (SUID, SGID, Sticky)
+          ==========================================
+          
+          SUID (Set User ID) - 4xxx
+          - Only for executables
+          - File executes with owner's privileges
+          - Example: passwd, sudo
+          - Mode 4755 = rwsr-xr-x
+          
+          SGID (Set Group ID) - 2xxx
+          - For files: executes with group privileges
+          - For directories: files inherit group ownership
+          - Mode 2755 = rwxr-sr-x (dir)
+          - Mode 2755 = rwxr-sr-x (file)
+          
+          Sticky Bit - 1xxx
+          - Only for directories
+          - Only owner can delete files
+          - Common in /tmp
+          - Mode 1777 = rwxrwxrwt
+          
+          Applied:
+          {% for item in special_perms %}
+          ✓ {{ item.path }}
+            - SUID: {{ item.suid }}, SGID: {{ item.sgid }}, Sticky: {{ item.sticky }}
+            - Mode: {{ item.mode }}
+            - {{ item.description }}
+          {% endfor %}
+          ==========================================
+
+    # ==========================================================
+    # TASK 3.16: Verify special permissions
+    # ==========================================================
+    - name: 3.16 - Verify special permissions
+      ansible.builtin.command: "ls -la {{ item.path }}"
+      loop: "{{ special_perms }}"
+      register: special_perms_verify
+      changed_when: false
+
+    # ==========================================================
+    # TASK 3.17: Display special permissions verification
+    # ==========================================================
+    - name: 3.17 - Display special permissions verification
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          SPECIAL PERMISSIONS VERIFICATION
+          ==========================================
+          {% for result in special_perms_verify.results %}
+          {{ result.stdout }}
+          {% endfor %}
+          ==========================================
+
+    # ==========================================================
+    # TASK 3.18: Show permission symbols
+    # ==========================================================
+    - name: 3.18 - Show permission symbols
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          PERMISSION SYMBOLS
+          ==========================================
+          
+          rwxrwxrwx (symbolic notation)
+          │││││││││
+          │││││││└─ others: execute
+          ││││││└── others: write
+          │││││└─── others: read
+          ││││└──── group: execute
+          │││└───── group: write
+          ││└────── group: read
+          │└─────── owner: execute
+          └──────── owner: write
+          
+          Position 0 (first): special bits (SUID, SGID, Sticky)
+          - s/S for SUID (owner execute position)
+          - s/S for SGID (group execute position)
+          - t/T for sticky (others execute position)
+          
+          Examples:
+          - rwxr-xr-x = 0755 (standard directory)
+          - rw-r--r-- = 0644 (standard file)
+          - rwsr-xr-x = 4755 (SUID executable)
+          - rwxr-sr-x = 2755 (SGID directory)
+          - rwxrwxrwt = 1777 (sticky directory)
+          ==========================================
+
+    # ==========================================================
+    # TASK 3.19: Demonstrate permission changes
+    # ==========================================================
+    - name: 3.19 - Demonstrate permission changes
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          PERMISSION CHANGE EXAMPLES
+          ==========================================
+          
+          chmod commands:
+          - chmod 644 file.txt    → rw-r--r--
+          - chmod 755 script.sh   → rwxr-xr-x
+          - chmod 700 private/    → rwx------
+          - chmod u+x file        → add execute for owner
+          - chmod g-w file        → remove write from group
+          - chmod o-rwx file      → remove all from others
+          
+          chown commands:
+          - chown user file       → change owner
+          - chown :group file     → change group only
+          - chown user:group file → change both
+          - chown -R user dir/    → recursive
+          
+          chgrp commands:
+          - chgrp group file      → change group
+          - chgrp -R group dir/   → recursive
+          ==========================================
+
+    # ==========================================================
+    # TASK 3.20: Create recursive permission example
+    # ==========================================================
+    - name: 3.20 - Create recursive permission example
+      ansible.builtin.file:
+        path: /opt/project
+        state: directory
+        owner: devuser
+        group: developers
+        mode: "0755"
+        recurse: yes
+
+    # ==========================================================
+    # TASK 3.21: Set secure directory permissions
+    # ==========================================================
+    - name: 3.21 - Set secure directory permissions
+      block:
+        - name: Create secure directories
+          ansible.builtin.file:
+            path: "{{ item }}"
+            state: directory
+            owner: root
+            group: root
+            mode: "0700"
+          loop:
+            - /root/.ssh
+            - /root/.gnupg
+            - /etc/ssl/private
+
+    # ==========================================================
+    # TASK 3.22: Display secure permissions
+    # ==========================================================
+    - name: 3.22 - Display secure permissions
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          SECURE DIRECTORY PERMISSIONS
+          ==========================================
+          
+          Directories requiring 0700 (rwx-----):
+          - /root/.ssh (SSH keys)
+          - /root/.gnupg (GPG keys)
+          - /etc/ssl/private (SSL certificates)
+          
+          These should NEVER be world or group readable!
+          
+          Common secure configurations:
+          - SSH directory: 0700 (owner only)
+          - SSH public key: 0644 (readable)
+          - SSH private key: 0600 (owner only)
+          - SSL certificate: 0644 (readable)
+          - SSL private key: 0600 (owner only)
+          ==========================================
+
+    # ==========================================================
+    # TASK 3.23: Create umask demonstration
+    # ==========================================================
+    - name: 3.23 - Create umask demonstration
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          UMASK (User File Creation Mask)
+          ==========================================
+          
+          umask determines default permissions for new files
+          
+          Default umask: 0022
+          - Files: 0666 - 0022 = 0644 (rw-r--r--)
+          - Dirs:  0777 - 0022 = 0755 (rwxr-xr-x)
+          
+          Secure umask: 0077
+          - Files: 0666 - 0077 = 0600 (rw-------)
+          - Dirs:  0777 - 0077 = 0700 (rwx------)
+          
+          Set in shell profile:
+          umask 0022  (standard, moderate security)
+          umask 0077  (strict security)
+          
+          Check current:
+          $ umask
+          ==========================================
+
+    # ==========================================================
+    # TASK 3.24: Create permission matrix
+    # ==========================================================
+    - name: 3.24 - Create permission matrix
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          PERMISSION MATRIX
+          ==========================================
+          
+          Read (r)    = 4
+          Write (w)   = 2
+          Execute (x) = 1
+          
+          Common octal permissions:
+          0700 rwx------  (owner only)
+          0600 rw-------  (owner only, no execute)
+          0755 rwxr-xr-x  (dir: standard)
+          0644 rw-r--r--  (file: standard)
+          0640 rw-r-----  (sensitive: group read)
+          0660 rw-rw----  (group writable)
+          0777 rwxrwxrwx  (full access - AVOID!)
+          0666 rw-rw-rw-  (world writable - DANGEROUS!)
+          
+          Permission table:
+          ┌───────┬───────┬───────┐
+          │ Owner │ Group │ Other │
+          ├───────┼───────┼───────┤
+          │  rwx  │  r-x  │  r-x  │ = 755 (dir)
+          │  rw-  │  r--  │  r--  │ = 644 (file)
+          │  rwx  │  ---  │  ---  │ = 700 (private)
+          │  rw-  │  ---  │  ---  │ = 600 (secret)
+          └───────┴───────┴───────┘
+          ==========================================
+
+    # ==========================================================
+    # TASK 3.25: Verify all permissions
+    # ==========================================================
+    - name: 3.25 - Verify all permissions
+      ansible.builtin.command: "find /opt -type f -o -type d"
+      register: all_files_verify
+      changed_when: false
+
+    # ==========================================================
+    # TASK 3.26: Display file listing with permissions
+    # ==========================================================
+    - name: 3.26 - Display file listing with permissions
+      ansible.builtin.command: "ls -laR /opt"
+      register: detailed_listing
+      changed_when: false
+
+    # ==========================================================
+    # TASK 3.27: Display detailed listing
+    # ==========================================================
+    - name: 3.27 - Display detailed listing
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          DETAILED FILE LISTING
+          ==========================================
+          {{ detailed_listing.stdout }}
+          ==========================================
+
+    # ==========================================================
+    # TASK 3.28: Create permissions security report
+    # ==========================================================
+    - name: 3.28 - Create permissions security report
+      ansible.builtin.copy:
+        content: |
+          ==========================================
+          FILE PERMISSIONS & ACL SECURITY REPORT
+          ==========================================
+          Generated on: {{ ansible_date_time.iso8601 }}
+          Hostname: {{ inventory_hostname }}
+          OS: {{ ansible_os_family }} {{ ansible_distribution_version }}
+          
+          ==========================================
+          FILES AND DIRECTORIES CREATED
+          ==========================================
+          {% for item in test_files %}
+          - {{ item.path }}
+            Owner: {{ item.owner }}:{{ item.group }}
+            Permissions: {{ item.mode }}
+            Type: {{ item.type }}
+            Description: {{ item.description }}
+          {% endfor %}
+          
+          ==========================================
+          ACL RULES APPLIED
+          ==========================================
+          {% for item in acl_rules %}
+          - {{ item.path }}
+            Entity: {{ item.entity }} ({{ item.etype }})
+            Permissions: {{ item.permissions }}
+            Description: {{ item.description }}
+          {% endfor %}
+          
+          ==========================================
+          SPECIAL PERMISSIONS SET
+          ==========================================
+          {% for item in special_perms %}
+          - {{ item.path }}
+            Mode: {{ item.mode }}
+            SUID: {{ item.suid }}, SGID: {{ item.sgid }}, Sticky: {{ item.sticky }}
+            Description: {{ item.description }}
+          {% endfor %}
+          
+          ==========================================
+          PERMISSION CONCEPTS
+          ==========================================
+          
+          Basic Permissions:
+          - Read (r) = 4
+          - Write (w) = 2
+          - Execute (x) = 1
+          
+          Positions:
+          - Owner (user): first digit
+          - Group: second digit
+          - Others: third digit
+          
+          Special Bits:
+          - SUID (4xxx): File executes as owner
+          - SGID (2xxx): File executes as group / Dir inherits group
+          - Sticky (1xxx): Only owner can delete (for dirs)
+          
+          ==========================================
+          ACL (ACCESS CONTROL LIST)
+          ==========================================
+          
+          Why ACL?
+          - Standard permissions only allow: owner, group, others
+          - ACL allows fine-grained per-user/group permissions
+          - Can grant access without changing ownership
+          
+          Advantages:
+          - More flexible than basic permissions
+          - Multiple users can have different access levels
+          - Can set per-directory or per-file
+          - Works with traditional permissions
+          
+          Commands:
+          - getfacl: Display ACL
+          - setfacl: Modify ACL
+          - getfattr: Get extended attributes
+          - setfattr: Set extended attributes
+          
+          ==========================================
+          SECURITY RECOMMENDATIONS
+          ==========================================
+          
+          File Permissions:
+          ✓ Executable scripts: 0755 or 0750
+          ✓ Configuration files: 0640 or 0644
+          ✓ Private data: 0600 or 0700
+          ✓ SSH keys: Always 0600
+          ✓ SSL certificates: 0644
+          ✓ SSL private keys: 0600
+          
+          Directories:
+          ✓ Application dirs: 0755
+          ✓ Private dirs: 0700
+          ✓ Temp dirs with sticky: 1777
+          ✓ Log dirs: 0755
+          
+          Ownership:
+          ✓ Application files: app user/group
+          ✓ System files: root
+          ✓ User home dirs: respective user
+          
+          ACL Usage:
+          ✓ Grant minimum necessary access
+          ✓ Use default ACLs for new files
+          ✓ Regular audits of permissions
+          ✓ Document special permissions
+          
+          ==========================================
+          NEXT STEPS
+          ==========================================
+          
+          1. Review all file permissions
+          2. Test ACL rules with different users
+          3. Verify special permissions work
+          4. Audit regularly with:
+             - ls -la
+             - getfacl
+             - find ... -perm
+          5. Document custom permissions
+          
+          ==========================================
+        dest: /tmp/chapter3_permissions_report.txt
+        owner: root
+        group: root
+        mode: '0644'
+
+    # ==========================================================
+    # TASK 3.29: Display report location
+    # ==========================================================
+    - name: 3.29 - Display report location
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          ✓ SECURITY REPORT GENERATED
+          ==========================================
+          Report Location: /tmp/chapter3_permissions_report.txt
+          
+          To view the report:
+            cat /tmp/chapter3_permissions_report.txt
+          
+          To copy report to control node:
+            scp root@{{ inventory_hostname }}:/tmp/chapter3_permissions_report.txt ./
+          
+          ==========================================
+
+    # ==========================================================
+    # TASK 3.30: Show final execution summary
+    # ==========================================================
+    - name: 3.30 - Show final execution summary
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          ✓ CHAPTER 3 EXECUTION COMPLETE
+          ==========================================
+          
+          EXECUTION STATISTICS:
+          - Total Tasks Executed: 30
+          - Host: {{ inventory_hostname }}
+          - OS: {{ ansible_os_family }} {{ ansible_distribution_version }}
+          - Execution Time: {{ ansible_date_time.iso8601 }}
+          
+          SUMMARY:
+          
+          FILES & DIRECTORIES CREATED: {{ test_files | length }}
+          {% for item in test_files %}
+          ✓ {{ item.path }} ({{ item.mode }})
+          {% endfor %}
+          
+          ACL RULES APPLIED: {{ acl_rules | length }}
+          {% for item in acl_rules %}
+          ✓ {{ item.entity }}:{{ item.permissions }} on {{ item.path }}
+          {% endfor %}
+          
+          SPECIAL PERMISSIONS: {{ special_perms | length }}
+          {% for item in special_perms %}
+          ✓ {{ item.path }} ({{ item.mode }})
+          {% endfor %}
+          
+          CONCEPTS COVERED:
+          ✓ Basic permissions (rwx)
+          ✓ Octal notation (0755, 0644, etc)
+          ✓ Permission symbols (r, w, x)
+          ✓ SUID, SGID, Sticky bits
+          ✓ ACL (Access Control Lists)
+          ✓ Security best practices
+          ✓ Recursive permissions
+          ✓ File ownership (chown)
+          
+          NEXT STEPS:
+          1. Review the generated report:
+             cat /tmp/chapter3_permissions_report.txt
+          
+          2. Test permissions as different users:
+             sudo -u devuser cat /opt/app/config.yml
+             sudo -u sysadmin ls /opt/app
+          
+          3. Verify ACL:
+             getfacl /opt/app
+             getfacl /opt/app/data
+          
+          4. Check special permissions:
+             ls -la /opt/app/sensitive_script.sh
+             ls -la /tmp/shared_dir
+          
+          5. Test permission changes:
+             chmod 600 /opt/app/config.yml
+             chown user:group /opt/app
+          
+          6. Learn more:
+             man chmod
+             man chown
+             man getfacl
+             man setfacl
+          
+          ==========================================
+          Status: ✓ SUCCESS
+          ==========================================
+
+# ============================================================
+# CHAPTER 3 PLAYBOOK COMPLETE
+# ============================================================
+# To run this playbook:
+#
+#   1. Check syntax:
+#      ansible-playbook -i inventory.ini CHAPTER-3-EXECUTABLE.yml --syntax-check
+#
+#   2. Dry run (see what will change):
+#      ansible-playbook -i inventory.ini CHAPTER-3-EXECUTABLE.yml --check
+#
+#   3. Execute playbook:
+#      ansible-playbook -i inventory.ini CHAPTER-3-EXECUTABLE.yml -v
+#
+#   4. Execute with detailed output:
+#      ansible-playbook -i inventory.ini CHAPTER-3-EXECUTABLE.yml -vvv
+#
+# Manual verification after playbook:
+#
+#   ls -la /opt/                       # View permissions
+#   getfacl /opt/app                   # View ACL
+#   stat /opt/app/config.yml           # View file details
+#   cat /tmp/chapter3_permissions_report.txt  # View report
+#   sudo -u devuser cat /opt/app/config.yml   # Test access
+#
+# ============================================================
+
