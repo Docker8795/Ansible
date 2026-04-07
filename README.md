@@ -21,7 +21,9 @@
 
 ### <b>Chapter 9: Network Configuration 
 
-### <b>Chapter 10: Troubleshooting <br> <br>
+### <b>Chapter 10: Troubleshooting <br>
+
+### <b>Chapter 11: OS Upgradation <br>
 
 
 ## <b> <U> Chapters 11-30 (SUMMARIES + KEY COMMANDS):<br>
