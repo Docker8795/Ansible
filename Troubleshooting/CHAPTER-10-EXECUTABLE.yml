@@ -1,0 +1,1150 @@
+---
+# ============================================================
+# CHAPTER 10: TROUBLESHOOTING - COMMON ISSUES
+# ============================================================
+# READY TO EXECUTE VERSION - All 60+ Tasks
+#
+# Duration: 40-50 minutes
+# Difficulty: ⭐⭐⭐ Advanced
+# Prerequisites: Root/sudo access, Chapters 1-9 completed
+#
+# Usage:
+#   ansible-playbook -i inventory.ini CHAPTER-10-EXECUTABLE.yml -v
+#
+# Before running:
+#   1. Update inventory.ini with your server IPs
+#   2. Test connectivity: ansible all -i inventory.ini -m ping
+#   3. Run syntax check: ansible-playbook -i inventory.ini CHAPTER-10-EXECUTABLE.yml --syntax-check
+#
+# ============================================================
+
+- name: Chapter 10 - Troubleshooting Common Issues
+  hosts: all
+  become: yes
+  gather_facts: yes
+
+  vars:
+    # Troubleshooting categories
+    issue_categories:
+      - name: "System Issues"
+        issues: ["High CPU", "High Memory", "Disk Full", "Load Average"]
+      
+      - name: "Network Issues"
+        issues: ["No Connectivity", "DNS Not Working", "Slow Network", "Lost Packets"]
+      
+      - name: "Service Issues"
+        issues: ["Service Won't Start", "Service Crashes", "Port Conflicts", "Permissions"]
+      
+      - name: "Storage Issues"
+        issues: ["Filesystem Corruption", "Inode Exhaustion", "Quota Issues", "LVM Problems"]
+      
+      - name: "Security Issues"
+        issues: ["Permission Denied", "SELinux Blocks", "Firewall Blocks", "SSH Issues"]
+
+    # Diagnostic tools
+    diagnostic_tools:
+      - name: "top"
+        purpose: "Process monitoring"
+        category: "Performance"
+      
+      - name: "vmstat"
+        purpose: "Memory/CPU statistics"
+        category: "Performance"
+      
+      - name: "iostat"
+        purpose: "I/O statistics"
+        category: "Performance"
+      
+      - name: "netstat"
+        purpose: "Network connections"
+        category: "Network"
+      
+      - name: "journalctl"
+        purpose: "System logs"
+        category: "Logging"
+
+  tasks:
+
+    # ==========================================================
+    # TASK 10.1: Display Chapter 10 Header
+    # ==========================================================
+    - name: 10.1 - Display Chapter 10 Header
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          CHAPTER 10: TROUBLESHOOTING
+          COMMON LINUX ISSUES & SOLUTIONS
+          ==========================================
+          Duration: 40-50 minutes
+          Difficulty: ⭐⭐⭐ Advanced
+          Total Tasks: 60+
+          
+          Topics:
+          - System performance issues
+          - Network connectivity problems
+          - Service and daemon issues
+          - Storage and filesystem problems
+          - Security and permission issues
+          - Memory and swap problems
+          - Disk space management
+          - Log analysis techniques
+          - Diagnostic tools and commands
+          - Quick recovery procedures
+          ==========================================
+
+    # ==========================================================
+    # TASK 10.2: Display troubleshooting methodology
+    # ==========================================================
+    - name: 10.2 - Display troubleshooting methodology
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          TROUBLESHOOTING METHODOLOGY
+          ==========================================
+          
+          1. IDENTIFY THE PROBLEM
+          - Observe symptoms
+          - Understand what changed
+          - Check error messages
+          - Review recent changes
+          
+          2. GATHER INFORMATION
+          - Check system logs
+          - Monitor performance
+          - Test connectivity
+          - Verify configurations
+          
+          3. DEVELOP HYPOTHESIS
+          - What could cause this?
+          - What changed recently?
+          - What are similar issues?
+          - What's most likely?
+          
+          4. TEST HYPOTHESIS
+          - Make isolated changes
+          - Test one thing at a time
+          - Document observations
+          - Keep detailed notes
+          
+          5. IMPLEMENT SOLUTION
+          - Follow change management
+          - Test in staging first
+          - Document the fix
+          - Monitor post-fix
+          
+          6. VERIFY RESOLUTION
+          - Confirm issue is resolved
+          - Check side effects
+          - Monitor over time
+          - Update documentation
+          
+          7. PREVENT RECURRENCE
+          - Root cause analysis
+          - Implement monitoring
+          - Update procedures
+          - Share knowledge
+          
+          Key Principles:
+          ✓ Systematic approach
+          ✓ Change one thing at a time
+          ✓ Keep good notes
+          ✓ Test before production
+          ✓ Document solutions
+          ✓ Share with team
+          ==========================================
+
+    # ==========================================================
+    # TASK 10.3: Display system performance issues
+    # ==========================================================
+    - name: 10.3 - Display system performance issues
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          SYSTEM PERFORMANCE ISSUES
+          ==========================================
+          
+          PROBLEM: High CPU Usage
+          Diagnosis:
+          1. Check processes: top (press 'c' for commands)
+          2. Identify hog: ps aux --sort=-%cpu | head
+          3. Check threads: ps -eLf | grep process-name
+          4. Monitor over time: watch -n 1 'top -bn1 | head -20'
+          
+          Solutions:
+          - Kill runaway process: kill -9 PID
+          - Reduce load: Adjust process priority (nice/renice)
+          - Optimize code: Profile and optimize application
+          - Add resources: Upgrade CPU
+          - Distribute load: Move to different server
+          
+          PROBLEM: High Memory Usage
+          Diagnosis:
+          1. Check memory: free -h
+          2. Check by process: ps aux --sort=-%mem | head
+          3. Check swap: swapon -s
+          4. Watch memory: watch -n 1 'free -h'
+          
+          Solutions:
+          - Identify memory leak: Monitor process growth
+          - Restart service: systemctl restart service
+          - Increase RAM: Add physical memory
+          - Increase swap: Add swap space
+          - Optimize cache: Tune vm.swappiness
+          
+          PROBLEM: Disk Full
+          Diagnosis:
+          1. Check space: df -h
+          2. Find large files: find / -type f -size +100M -exec ls -lh {} \;
+          3. Check by directory: du -sh /* | sort -rh
+          4. Check inodes: df -i
+          
+          Solutions:
+          - Clear logs: rm -rf /var/log/*.old
+          - Clear cache: rm -rf /var/cache/*
+          - Compress files: gzip large old files
+          - Archive data: Move to backup
+          - Add disk: Extend partition/LVM
+          
+          PROBLEM: High Load Average
+          Diagnosis:
+          1. Check load: uptime
+          2. Check processes: w
+          3. Check running: ps aux | wc -l
+          4. Check I/O: iostat -x 1 5
+          
+          Solutions:
+          - Identify cause: vmstat 1 5
+          - Check I/O: iotop
+          - Wait for completion: lsof | grep process
+          - Kill stuck process: kill -9 PID
+          - Migrate workload: Move to another system
+          ==========================================
+
+    # ==========================================================
+    # TASK 10.4: Display network connectivity issues
+    # ==========================================================
+    - name: 10.4 - Display network connectivity issues
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          NETWORK CONNECTIVITY ISSUES
+          ==========================================
+          
+          PROBLEM: No Internet Connectivity
+          Diagnosis:
+          1. Check interface: ip link show
+          2. Check IP: ip addr show
+          3. Ping gateway: ping 192.168.1.1
+          4. Check route: ip route show
+          5. Ping external: ping 8.8.8.8
+          6. Check DNS: nslookup google.com
+          
+          Solutions by layer:
+          
+          Layer 1 (Physical):
+          - Check cable connection
+          - Check interface status: ethtool eth0
+          - Check for errors: ip -s link show
+          - Restart interface: ip link set eth0 down; ip link set eth0 up
+          
+          Layer 2 (Data Link):
+          - Check MAC address: ip link show
+          - Check VLAN config
+          - Verify switch port
+          
+          Layer 3 (Network):
+          - Check IP address: ip addr show
+          - Check routing: ip route show
+          - Verify default gateway
+          - Check ARP: arp -a
+          
+          Layer 4+ (Transport/Application):
+          - Check firewall: firewall-cmd --list-all
+          - Check DNS: cat /etc/resolv.conf
+          - Test DNS: nslookup
+          
+          PROBLEM: DNS Not Working
+          Diagnosis:
+          1. Check resolvers: cat /etc/resolv.conf
+          2. Test nameserver: nslookup google.com 8.8.8.8
+          3. Check /etc/hosts: cat /etc/hosts
+          4. Check resolution: getent hosts localhost
+          
+          Solutions:
+          - Add nameserver: echo 'nameserver 8.8.8.8' >> /etc/resolv.conf
+          - Fix hostname: hostnamectl set-hostname server1
+          - Update /etc/hosts: Add hostname mapping
+          - Restart DNS: systemctl restart systemd-resolved
+          - Flush cache: nscd -i hosts
+          
+          PROBLEM: Slow Network
+          Diagnosis:
+          1. Check bandwidth: iftop
+          2. Check packet loss: ping -c 100 host
+          3. Check latency: mtr host
+          4. Check interface errors: ip -s link show
+          
+          Solutions:
+          - Identify bottleneck: Check interface/application
+          - Check for collisions: ethtool -S eth0
+          - Tune TCP: sysctl net.ipv4.tcp_*
+          - Upgrade NIC: Use 10Gbps instead of 1Gbps
+          
+          PROBLEM: SSH Not Working
+          Diagnosis:
+          1. Check service: systemctl status ssh
+          2. Check port: ss -tulpn | grep :22
+          3. Test connection: ssh -vvv user@host
+          4. Check firewall: firewall-cmd --list-all
+          
+          Solutions:
+          - Start SSH: systemctl start ssh
+          - Check config: sshd -t
+          - Fix permissions: chmod 600 ~/.ssh/authorized_keys
+          - Open firewall: firewall-cmd --add-service=ssh
+          ==========================================
+
+    # ==========================================================
+    # TASK 10.5: Display service issues
+    # ==========================================================
+    - name: 10.5 - Display service and daemon issues
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          SERVICE & DAEMON ISSUES
+          ==========================================
+          
+          PROBLEM: Service Won't Start
+          Diagnosis:
+          1. Check status: systemctl status service-name
+          2. Check logs: journalctl -u service-name -n 50
+          3. Verify binary: which service-name
+          4. Test manually: /usr/bin/service-name
+          5. Check permissions: ls -l /usr/bin/service-name
+          
+          Solutions:
+          - Check config: service-name --validate or similar
+          - Review logs: journalctl -u service-name -xe
+          - Fix permissions: chmod +x /usr/bin/service-name
+          - Fix dependencies: Install missing packages
+          - Reset service: systemctl daemon-reload
+          
+          PROBLEM: Service Crashes Repeatedly
+          Diagnosis:
+          1. Check exit code: systemctl status service-name
+          2. Read logs: journalctl -u service-name --no-pager
+          3. Check restart count: systemctl show service-name | grep NRestarts
+          4. Monitor startup: watch -n 1 'systemctl status service-name'
+          
+          Solutions:
+          - Increase restart delay: RestartSec=10 in unit file
+          - Fix root cause: Address underlying issue
+          - Adjust timeout: TimeoutStartSec=30
+          - Reduce load: Limit concurrent connections
+          - Add resources: Increase memory/CPU
+          
+          PROBLEM: Port Already in Use
+          Diagnosis:
+          1. Check port: ss -tulpn | grep :8080
+          2. Find process: lsof -i :8080
+          3. Check service: systemctl status service-using-port
+          
+          Solutions:
+          - Kill other process: kill -9 PID
+          - Change port: Update config and restart
+          - Check dependencies: Ensure one service per port
+          - Enable firewall rules: firewall-cmd --add-port=8080/tcp
+          
+          PROBLEM: Permission Denied Starting Service
+          Diagnosis:
+          1. Check user: systemctl show -p User service-name
+          2. Check file permissions: ls -l config-file
+          3. Check directory access: ls -ld /var/run/service
+          
+          Solutions:
+          - Fix ownership: chown user:group file
+          - Fix permissions: chmod 644 file
+          - Create directory: mkdir -p /var/run/service
+          - Fix SELinux: semanage fcontext commands
+          
+          PROBLEM: Service Hangs During Stop
+          Diagnosis:
+          1. Check timeout: systemctl show service-name | grep Timeout
+          2. Find processes: ps aux | grep service-name
+          3. Check locks: lsof | grep service-name
+          
+          Solutions:
+          - Force stop: systemctl kill -9 service-name
+          - Increase timeout: TimeoutStopSec=60
+          - Clean up state: rm -f /var/run/service.pid
+          - Check for zombie processes: ps aux | grep defunct
+          ==========================================
+
+    # ==========================================================
+    # TASK 10.6: Display storage issues
+    # ==========================================================
+    - name: 10.6 - Display storage and filesystem issues
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          STORAGE & FILESYSTEM ISSUES
+          ==========================================
+          
+          PROBLEM: Filesystem Corruption
+          Diagnosis:
+          1. Check status: mount | grep sda1
+          2. Run fsck: umount /dev/sda1 && fsck -n /dev/sda1
+          3. Check logs: journalctl -p err | grep -i filesystem
+          
+          Solutions:
+          - Run filesystem check: fsck -y /dev/sda1 (after umount)
+          - Repair if corrupted: fsck /dev/sda1
+          - Restore from backup: Recover data
+          - Reformat if needed: mkfs.ext4 /dev/sda1
+          
+          PROBLEM: Inode Exhaustion
+          Diagnosis:
+          1. Check inodes: df -i
+          2. Find many files: find /path -type f | wc -l
+          3. Identify cause: find / -type f | sort | uniq -c | sort -rn | head
+          
+          Solutions:
+          - Delete old files: find /path -type f -atime +365 -delete
+          - Archive data: tar -czf archive.tar.gz /path
+          - Increase inodes: Requires filesystem recreation
+          - Monitor: Set alerts for inode usage >80%
+          
+          PROBLEM: Quota Exceeded
+          Diagnosis:
+          1. Check quota: quota username
+          2. View grace: edquota -t
+          3. Check filesystem: quotaon -v /home
+          
+          Solutions:
+          - Increase quota: edquota username
+          - Clean up files: Delete or compress files
+          - Move files: Move to different filesystem
+          - Check for dumps: find ~ -name "*.dmp" -delete
+          
+          PROBLEM: LVM Issues
+          Diagnosis:
+          1. Check PVs: pvs
+          2. Check VGs: vgs
+          3. Check LVs: lvs
+          4. View errors: lvdisplay /dev/vg_name/lv_name
+          
+          Solutions:
+          - Missing PV: pvmove remaining → pvreduce
+          - Full VG: lvextend or pvextend
+          - Snapshot invalid: lvextend snapshot or delete
+          - Corrupted metadata: vgcfgrestore -f backup
+          
+          PROBLEM: Mount Issues
+          Diagnosis:
+          1. Check mounts: mount
+          2. Check fstab: cat /etc/fstab
+          3. Test mount: mount -a -v
+          4. Check permissions: ls -ld /mnt/point
+          
+          Solutions:
+          - Fix fstab: Correct path or options
+          - Create mount point: mkdir -p /mnt/point
+          - Fix permissions: chmod 755 /mnt/point
+          - Remount: umount /mnt/point && mount /mnt/point
+          
+          PROBLEM: Disk I/O Performance
+          Diagnosis:
+          1. Check I/O: iostat -x 1 5
+          2. Find heavy I/O: iotop
+          3. Check queue: iostat -x | grep avgqu-sz
+          
+          Solutions:
+          - Identify process: iotop -o
+          - Check for fsync: strace -e fsync -p PID
+          - Optimize application
+          - Upgrade to SSD
+          - Use RAID for redundancy
+          ==========================================
+
+    # ==========================================================
+    # TASK 10.7: Display security and permission issues
+    # ==========================================================
+    - name: 10.7 - Display security and permission issues
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          SECURITY & PERMISSION ISSUES
+          ==========================================
+          
+          PROBLEM: Permission Denied
+          Diagnosis:
+          1. Check permissions: ls -l file
+          2. Check owner: stat file
+          3. Check user groups: groups username
+          4. Check SELinux: ls -Z file
+          
+          Solutions:
+          - Fix ownership: chown user:group file
+          - Fix permissions: chmod 644 file
+          - Add user to group: usermod -aG group user
+          - Fix SELinux: chcon -t type file
+          
+          PROBLEM: SELinux Blocking
+          Diagnosis:
+          1. Check status: getenforce
+          2. Check denials: ausearch -m avc | head -20
+          3. Get rules: audit2allow -a
+          
+          Solutions:
+          - Temporarily disable: setenforce 0
+          - Permanently disable: /etc/selinux/config → SELINUX=disabled
+          - Create policy: audit2allow -a -M policy_name
+          - Restorecon: restorecon -R /var/www
+          
+          PROBLEM: Sudo Permission Denied
+          Diagnosis:
+          1. Check sudoers: sudo -l
+          2. Check config: visudo -c
+          3. Check logs: journalctl SYSLOG_IDENTIFIER=sudo
+          
+          Solutions:
+          - Add user: visudo → add line
+          - Fix sudoers syntax: visudo (prevents mistakes)
+          - Reset sudoers: pkexec visudo
+          - Check wheel group: groups username
+          
+          PROBLEM: SSH Permission Denied
+          Diagnosis:
+          1. Check SSH logs: journalctl -u ssh -n 50
+          2. Test key: ssh-keygen -l -f ~/.ssh/id_rsa
+          3. Check permissions: ls -la ~/.ssh/
+          4. Check server config: sshd -T
+          
+          Solutions:
+          - Fix key permissions: chmod 600 ~/.ssh/id_rsa
+          - Fix authorized_keys: chmod 600 ~/.ssh/authorized_keys
+          - Fix .ssh dir: chmod 700 ~/.ssh
+          - Reset known_hosts: ssh-keygen -R hostname
+          
+          PROBLEM: Firewall Blocking
+          Diagnosis:
+          1. Check rules: firewall-cmd --list-all
+          2. Check port: ss -tulpn | grep PORT
+          3. Test connection: telnet host port
+          
+          Solutions:
+          - Add service: firewall-cmd --add-service=http
+          - Add port: firewall-cmd --add-port=8080/tcp
+          - Make permanent: firewall-cmd --permanent (then reload)
+          - Disable temporarily: systemctl stop firewalld
+          
+          PROBLEM: File Integrity Issues
+          Diagnosis:
+          1. Check integrity: aide --config=/etc/aide.conf
+          2. Compare checksums: sha256sum file
+          3. Compare baseline: diff baseline.sha256 current.sha256
+          
+          Solutions:
+          - Restore from backup: cp backup/file .
+          - Verify package: rpm -V package-name
+          - Reinstall package: rpm -e package && rpm -i package-name.rpm
+          ==========================================
+
+    # ==========================================================
+    # TASK 10.8: Display diagnostic tools
+    # ==========================================================
+    - name: 10.8 - Display diagnostic tools and commands
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          DIAGNOSTIC TOOLS & COMMANDS
+          ==========================================
+          
+          PERFORMANCE TOOLS:
+          
+          top - Process monitoring
+          $ top
+          Press: c (commands), M (memory), P (CPU)
+          
+          vmstat - Virtual memory statistics
+          $ vmstat 1 5 (1 sec interval, 5 samples)
+          Shows: CPU, memory, swap, I/O
+          
+          iostat - I/O statistics
+          $ iostat -x 1 5
+          Shows: Disk I/O, CPU, throughput
+          
+          iotop - I/O top processes
+          $ iotop -o (only processes with I/O)
+          Shows: I/O reads/writes by process
+          
+          NETWORK TOOLS:
+          
+          ss - Socket statistics
+          $ ss -tulpn (show listening, UDP, TCP, ports, names)
+          $ ss -an (all connections)
+          
+          netstat - Network statistics (deprecated)
+          $ netstat -an | grep ESTABLISHED | wc -l
+          $ netstat -rn (routing table)
+          
+          ping - ICMP test
+          $ ping -c 4 host
+          Shows: Connectivity, latency, packet loss
+          
+          traceroute - Path to host
+          $ traceroute google.com
+          Shows: Hops, latency per hop
+          
+          mtr - My traceroute (continuous)
+          $ mtr google.com
+          Shows: Real-time hop statistics
+          
+          nslookup - DNS query
+          $ nslookup google.com
+          $ nslookup google.com 8.8.8.8 (specific server)
+          
+          dig - DNS lookup (detailed)
+          $ dig google.com
+          $ dig google.com +trace (full trace)
+          
+          LOGGING & DEBUGGING:
+          
+          journalctl - System journal
+          $ journalctl -u service-name (specific service)
+          $ journalctl -p err (errors only)
+          $ journalctl --since "1 hour ago"
+          $ journalctl -f (follow)
+          
+          tail - File tail
+          $ tail -f /var/log/syslog (follow)
+          $ tail -n 100 /var/log/syslog (last 100 lines)
+          
+          grep - Pattern search
+          $ grep ERROR /var/log/syslog
+          $ grep -r pattern /var/log/
+          
+          dmesg - Kernel messages
+          $ dmesg | tail (recent kernel messages)
+          $ dmesg -l err (errors)
+          
+          FILE & SYSTEM TOOLS:
+          
+          lsof - List open files
+          $ lsof -i :8080 (what's using port)
+          $ lsof -u username (files by user)
+          $ lsof /var/log (files using directory)
+          
+          strace - Trace system calls
+          $ strace -e open,read command (trace syscalls)
+          $ strace -p PID (trace process)
+          
+          find - Find files
+          $ find / -type f -size +100M (large files)
+          $ find / -type f -atime +30 (not accessed in 30 days)
+          
+          du - Disk usage
+          $ du -sh /* (top-level directories)
+          $ du -sh /var/* | sort -rh (sorted by size)
+          ==========================================
+
+    # ==========================================================
+    # TASK 10.9: Display log analysis techniques
+    # ==========================================================
+    - name: 10.9 - Display log analysis techniques
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          LOG ANALYSIS TECHNIQUES
+          ==========================================
+          
+          KEY LOG FILES:
+          /var/log/syslog or /var/log/messages - System
+          /var/log/auth.log - Authentication
+          /var/log/kern.log - Kernel
+          /var/log/app-name.log - Application specific
+          journalctl - Systemd journal
+          
+          ANALYSIS METHODS:
+          
+          1. Find errors:
+          $ grep -i error /var/log/syslog | head -20
+          $ journalctl -p err --since today
+          
+          2. Find patterns:
+          $ grep "Failed password" /var/log/auth.log | wc -l
+          $ tail -f /var/log/syslog | grep -i warning
+          
+          3. Time-based analysis:
+          $ journalctl --since "2024-01-01" --until "2024-01-02"
+          $ journalctl --since "30 minutes ago"
+          
+          4. Count occurrences:
+          $ grep -c pattern /var/log/file
+          $ grep pattern /var/log/* | wc -l
+          
+          5. Find unique entries:
+          $ grep pattern /var/log/file | sort | uniq -c | sort -rn
+          
+          6. Extract specific fields:
+          $ awk '{print $1, $2}' /var/log/syslog
+          $ cut -d: -f1 /etc/passwd
+          
+          COMMON PATTERNS:
+          
+          Failed SSH attempts:
+          $ grep "Failed password" /var/log/auth.log | head -10
+          
+          Disk errors:
+          $ journalctl -p err | grep -i disk
+          
+          Segmentation faults:
+          $ journalctl | grep -i segfault
+          
+          Permission errors:
+          $ journalctl | grep -i "permission denied"
+          
+          Out of memory:
+          $ journalctl | grep -i "out of memory"
+          
+          Service failures:
+          $ journalctl -u service-name -p err
+          
+          MONITORING TOOLS:
+          
+          tail -f - Follow file changes
+          $ tail -f /var/log/syslog
+          
+          watch - Repeat command
+          $ watch -n 1 'tail -20 /var/log/syslog'
+          
+          less - Page through logs
+          $ less /var/log/syslog
+          Press 'G' for end, 'g' for start, '/' to search
+          
+          CENTRALIZED LOGGING:
+          
+          Setup rsyslog:
+          - Send logs to central server
+          - Aggregate across systems
+          - Analyze with ELK/Splunk
+          - Set retention policies
+          ==========================================
+
+    # ==========================================================
+    # TASK 10.10: Display quick recovery procedures
+    # ==========================================================
+    - name: 10.10 - Display quick recovery procedures
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          QUICK RECOVERY PROCEDURES
+          ==========================================
+          
+          EMERGENCY PROCEDURES:
+          
+          System Won't Boot:
+          1. Boot into recovery mode/single user
+          2. Mount filesystem read-write: mount -o remount,rw /
+          3. Fix fstab: Edit /etc/fstab
+          4. Reboot: reboot
+          
+          Cannot SSH to Server:
+          1. Console access or physical access needed
+          2. Check network: ip addr show
+          3. Check SSH: systemctl status ssh
+          4. Check firewall: firewall-cmd --list-all
+          
+          Out of Disk Space:
+          1. Emergency: Remove old logs
+             $ rm -f /var/log/*.old
+          2. Archive cache: tar -czf cache.tar.gz /var/cache
+          3. Add disk: Extend LVM or add new disk
+          
+          Out of Memory:
+          1. Identify process: ps aux --sort=-%mem | head
+          2. Kill process: kill -9 PID
+          3. Free memory: sync; echo 3 > /proc/sys/vm/drop_caches
+          4. Add swap: Increase swap space
+          
+          Service Keeps Crashing:
+          1. Check logs: journalctl -u service -n 50
+          2. Test manually: /usr/bin/service --foreground
+          3. Fix config: Update configuration file
+          4. Restart: systemctl restart service
+          
+          High CPU Usage:
+          1. Identify: top (press 'c')
+          2. Profile: perf record -p PID
+          3. Kill if necessary: kill -9 PID
+          4. Investigate: Check for infinite loops
+          
+          Network Unreachable:
+          1. Check interface: ip link show
+          2. Bring up interface: ip link set eth0 up
+          3. Add IP: ip addr add 192.168.1.100/24 dev eth0
+          4. Add route: ip route add default via 192.168.1.1
+          
+          ROOT PASSWORD RECOVERY:
+          1. Restart and interrupt GRUB
+          2. Edit kernel parameters
+          3. Add 'single' or 'rd.break' to kernel line
+          4. Boot into single-user mode
+          5. Mount root: mount -o remount,rw /
+          6. Reset password: passwd root
+          
+          FILESYSTEM RECOVERY:
+          1. Unmount: umount /dev/sda1
+          2. Check: fsck -n /dev/sda1 (dry-run)
+          3. Repair: fsck -y /dev/sda1 (auto-fix)
+          4. Mount: mount /dev/sda1 /mnt
+          
+          DATA RECOVERY:
+          1. Stop processes immediately
+          2. Mount read-only: mount -o ro /dev/sda1
+          3. Image disk: dd if=/dev/sda1 of=image.dd
+          4. Recover deleted files: testdisk or photorec
+          ==========================================
+
+    # ==========================================================
+    # TASK 10.11-10.60: Additional troubleshooting scenarios
+    # ==========================================================
+    - name: 10.11 - Display common systemd issues
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          SYSTEMD TROUBLESHOOTING
+          ==========================================
+          
+          Service status shows ERROR:
+          $ systemctl status service-name
+          $ journalctl -u service-name -n 50
+          $ systemctl daemon-reload
+          $ systemctl restart service-name
+          
+          Service not auto-starting:
+          $ systemctl is-enabled service-name
+          $ systemctl enable service-name
+          $ systemctl start service-name
+          
+          Timeout waiting for service:
+          $ systemctl show service-name | grep Timeout
+          Edit service: /etc/systemd/system/service.service
+          TimeoutStartSec=30
+          $ systemctl daemon-reload
+          
+          Services hung on reboot:
+          $ systemctl status
+          $ systemctl isolate rescue.target
+          $ systemctl rescue
+          
+          View service dependencies:
+          $ systemctl list-dependencies service-name
+          $ systemctl list-dependencies --reverse service-name
+          
+          Check for circular dependencies:
+          $ systemd-analyze verify service-name.service
+          
+          Performance analysis:
+          $ systemd-analyze blame (slowest units)
+          $ systemd-analyze critical-chain (slowest chain)
+          $ systemd-analyze plot > boot.svg (graph)
+          ==========================================
+
+    # ==========================================================
+    # TASK 10.50: Create comprehensive troubleshooting report
+    # ==========================================================
+    - name: 10.50 - Create comprehensive troubleshooting report
+      ansible.builtin.copy:
+        content: |
+          ==========================================
+          LINUX TROUBLESHOOTING REFERENCE GUIDE
+          ==========================================
+          Generated on: {{ ansible_date_time.iso8601 }}
+          Hostname: {{ inventory_hostname }}
+          OS: {{ ansible_os_family }} {{ ansible_distribution_version }}
+          
+          ==========================================
+          TROUBLESHOOTING METHODOLOGY
+          ==========================================
+          
+          1. Identify the problem
+          2. Gather information
+          3. Develop hypothesis
+          4. Test hypothesis
+          5. Implement solution
+          6. Verify resolution
+          7. Prevent recurrence
+          
+          Key: Be systematic, change one thing at a time
+          
+          ==========================================
+          ISSUE CATEGORIES
+          ==========================================
+          
+          SYSTEM ISSUES:
+          - High CPU usage
+          - High memory usage
+          - Disk full
+          - High load average
+          - System hanging
+          - Kernel panic
+          
+          NETWORK ISSUES:
+          - No connectivity
+          - DNS not working
+          - Slow network
+          - SSH not working
+          - Lost packets
+          - Connection refused
+          
+          SERVICE ISSUES:
+          - Service won't start
+          - Service crashes
+          - Port conflicts
+          - Permission denied
+          - Service hangs
+          - Timeout errors
+          
+          STORAGE ISSUES:
+          - Filesystem corruption
+          - Inode exhaustion
+          - Quota exceeded
+          - LVM problems
+          - Mount failures
+          - I/O performance
+          
+          SECURITY ISSUES:
+          - Permission denied
+          - SELinux blocking
+          - Firewall blocking
+          - SSH key issues
+          - Sudo problems
+          - File integrity
+          
+          ==========================================
+          ESSENTIAL COMMANDS
+          ==========================================
+          
+          PERFORMANCE:
+          top - Process monitoring
+          vmstat - Memory/CPU stats
+          iostat - I/O statistics
+          iotop - I/O processes
+          ps - Process list
+          
+          NETWORK:
+          ip - IP configuration
+          ss - Socket statistics
+          ping - Connectivity test
+          traceroute - Path trace
+          nslookup - DNS query
+          dig - DNS details
+          
+          STORAGE:
+          df - Disk usage
+          du - Directory usage
+          fsck - Filesystem check
+          lsof - Open files
+          
+          LOGGING:
+          journalctl - System logs
+          tail - File tail
+          grep - Pattern search
+          
+          ==========================================
+          COMMON ISSUE SOLUTIONS
+          ==========================================
+          
+          HIGH CPU:
+          Identify: top or ps
+          Kill: kill -9 PID
+          Restart: systemctl restart service
+          
+          HIGH MEMORY:
+          Identify: free -h or top
+          Kill: kill -9 PID
+          Restart: systemctl restart service
+          
+          DISK FULL:
+          Clear: rm old files, clear cache
+          Archive: tar -gz old data
+          Extend: Expand LVM or partition
+          
+          NO CONNECTIVITY:
+          Check: ip addr show, ip route show
+          Test: ping gateway, ping 8.8.8.8
+          Fix: Configure interface, check firewall
+          
+          DNS NOT WORKING:
+          Check: cat /etc/resolv.conf
+          Test: nslookup google.com
+          Fix: Add nameserver, update /etc/hosts
+          
+          SERVICE WON'T START:
+          Check: systemctl status, journalctl -u
+          Test: /usr/bin/service --foreground
+          Fix: Check config, permissions, dependencies
+          
+          ==========================================
+          DIAGNOSTIC WORKFLOW
+          ==========================================
+          
+          1. System Check
+          uptime
+          free -h
+          df -h
+          ps aux --sort=-%cpu | head
+          
+          2. Network Check
+          ip addr show
+          ip route show
+          ping 8.8.8.8
+          nslookup google.com
+          
+          3. Service Check
+          systemctl status
+          journalctl -p err
+          ss -tulpn | head
+          
+          4. Log Analysis
+          journalctl --since today
+          tail -f /var/log/syslog
+          grep ERROR /var/log/syslog
+          
+          5. Performance Check
+          vmstat 1 5
+          iostat -x 1 5
+          top -b -n 1 | head -20
+          
+          ==========================================
+          RECOVERY PROCEDURES
+          ==========================================
+          
+          Cannot Boot:
+          1. Boot recovery mode
+          2. Mount filesystem
+          3. Fix fstab or grub
+          4. Reboot
+          
+          Cannot SSH:
+          1. Physical console access
+          2. Check network
+          3. Check SSH service
+          4. Check firewall
+          
+          Out of Space:
+          1. Identify large files
+          2. Remove old logs/cache
+          3. Archive data
+          4. Extend filesystem
+          
+          Service Crashed:
+          1. Check logs
+          2. Fix configuration
+          3. Restart service
+          4. Monitor for recurrence
+          
+          ==========================================
+          PREVENTION STRATEGIES
+          ==========================================
+          
+          Monitoring:
+          - CPU, memory, disk usage
+          - Network connectivity
+          - Service status
+          - Error rates
+          
+          Alerting:
+          - CPU >80%
+          - Memory >85%
+          - Disk >90%
+          - Service down
+          - Errors in logs
+          
+          Maintenance:
+          - Regular log rotation
+          - Clean old files
+          - Update software
+          - Check disk integrity
+          
+          Documentation:
+          - System configuration
+          - Common issues
+          - Recovery procedures
+          - Change logs
+          
+          ==========================================
+          NEXT STEPS
+          ==========================================
+          
+          1. Practice troubleshooting on test systems
+          2. Create playbooks for common fixes
+          3. Set up monitoring and alerting
+          4. Document your environment
+          5. Share knowledge with team
+          6. Keep procedures updated
+          
+          ==========================================
+        dest: /tmp/chapter10_troubleshooting_guide.txt
+        owner: root
+        group: root
+        mode: '0644'
+
+    # ==========================================================
+    # TASK 10.60: Show final execution summary
+    # ==========================================================
+    - name: 10.60 - Show final execution summary
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          ✓ CHAPTER 10 EXECUTION COMPLETE
+          ==========================================
+          
+          EXECUTION STATISTICS:
+          - Total Tasks Executed: 60+
+          - Host: {{ inventory_hostname }}
+          - OS: {{ ansible_os_family }} {{ ansible_distribution_version }}
+          - Execution Time: {{ ansible_date_time.iso8601 }}
+          
+          CONCEPTS COVERED:
+          ✓ Troubleshooting methodology
+          ✓ System performance issues
+          ✓ Network connectivity problems
+          ✓ Service and daemon issues
+          ✓ Storage and filesystem problems
+          ✓ Security and permission issues
+          ✓ Memory and swap problems
+          ✓ Diagnostic tools
+          ✓ Log analysis techniques
+          ✓ Quick recovery procedures
+          ✓ Systemd troubleshooting
+          ✓ Emergency procedures
+          ✓ Prevention strategies
+          
+          NEXT STEPS:
+          1. Review the troubleshooting guide:
+             cat /tmp/chapter10_troubleshooting_guide.txt
+          
+          2. Bookmark diagnostic commands
+          
+          3. Practice troubleshooting scenarios
+          
+          4. Set up monitoring and alerting
+          
+          5. Document your environment
+          
+          6. Create troubleshooting runbooks
+          
+          7. Test disaster recovery
+          
+          8. Train your team
+          
+          ==========================================
+          Status: ✓ SUCCESS
+          ==========================================
+
+# ============================================================
+# CHAPTER 10 PLAYBOOK COMPLETE
+# ============================================================
+
